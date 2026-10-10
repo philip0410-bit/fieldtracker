@@ -27,6 +27,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Refresh
@@ -46,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +72,7 @@ import com.philip.fieldtracker.ui.components.BigButton
 import com.philip.fieldtracker.ui.components.Chip
 import com.philip.fieldtracker.ui.components.FieldCanvas
 import com.philip.fieldtracker.ui.components.GhostButton
+import com.philip.fieldtracker.ui.components.GpsPanel
 import com.philip.fieldtracker.ui.components.IconSquare
 import com.philip.fieldtracker.ui.components.Label
 import com.philip.fieldtracker.ui.components.Panel
@@ -95,9 +99,11 @@ fun SetupScreen(onNext: () -> Unit, onOpenStats: () -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        HardwareSection(onOpenStats)
+        GpsPanel("setup-panel")
         Spacer(Modifier.height(20.dp))
         SportSection(selected)
+        Spacer(Modifier.height(20.dp))
+        HardwareSection(onOpenStats)
         Spacer(Modifier.height(20.dp))
         DisplaySection()
         Spacer(Modifier.height(20.dp))
@@ -297,38 +303,78 @@ private fun SportSection(selected: Sport?) {
             (query.isBlank() || s.name.contains(query.trim(), ignoreCase = true))
     }
 
-    SectionTitle("Choix du sport", "${Sports.all.size} sports")
-    OutlinedTextField(
-        value = query,
-        onValueChange = { query = it },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        placeholder = { Text("Rechercher un sport", style = Type.body, color = p.muted) },
-        leadingIcon = { Icon(Icons.Filled.Search, null, tint = p.muted) },
-        textStyle = Type.body.copy(color = p.text),
-        shape = Shape8,
-        colors = fieldColors(),
-    )
-    Spacer(Modifier.height(10.dp))
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Chip("Tous", category == null) { category = null }
-        Sports.categories.forEach { c -> Chip(c, category == c) { category = c } }
+    var expanded by rememberSaveable { mutableStateOf(selected == null) }
+
+    // En-tête repliable
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(Shape8)
+            .clickable { expanded = !expanded }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Choix du sport", style = Type.h2, color = p.text, modifier = Modifier.weight(1f))
+        Label(if (expanded) "Fermer" else "Ouvrir", color = p.primary)
+        Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = p.primary)
     }
-    Spacer(Modifier.height(12.dp))
-    list.chunked(2).forEach { row ->
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            row.forEach { s ->
-                SportCard(s, s.id == selected?.id, Modifier.weight(1f)) {
-                    AppState.selectSport(s)
-                    Calibrator.prepare(s)
-                    WatchLink.pushState(force = true)
+    if (!expanded) {
+        if (selected != null) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(Shape12)
+                    .background(p.surface)
+                    .border(2.dp, p.primary, Shape12)
+                    .clickable { expanded = true }
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.width(96.dp)) { FieldCanvas(selected, inset = 4.dp, lineColor = p.primary, strokeDp = 1f) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(selected.name, style = Type.bodyBold, color = p.text)
+                    Label(selected.dims, color = p.primary, style = Type.caption)
+                    Label("Touche pour changer de sport", style = Type.caption)
                 }
             }
-            if (row.size == 1) Spacer(Modifier.weight(1f))
+        } else {
+            Text("Aucun sport choisi — touche « Ouvrir ».", style = Type.body, color = p.muted)
         }
-        Spacer(Modifier.height(10.dp))
+        return
     }
-    if (list.isEmpty()) Text("Aucun sport trouvé.", style = Type.body, color = p.muted)
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("Rechercher un sport", style = Type.body, color = p.muted) },
+            leadingIcon = { Icon(Icons.Filled.Search, null, tint = p.muted) },
+            textStyle = Type.body.copy(color = p.text),
+            shape = Shape8,
+            colors = fieldColors(),
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip("Tous", category == null) { category = null }
+            Sports.categories.forEach { c -> Chip(c, category == c) { category = c } }
+        }
+        Spacer(Modifier.height(12.dp))
+        list.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { s ->
+                    SportCard(s, s.id == selected?.id, Modifier.weight(1f)) {
+                        AppState.selectSport(s)
+                        expanded = false
+                        Calibrator.prepare(s)
+                        WatchLink.pushState(force = true)
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+        if (list.isEmpty()) Text("Aucun sport trouvé.", style = Type.body, color = p.muted)
 }
 
 @Composable

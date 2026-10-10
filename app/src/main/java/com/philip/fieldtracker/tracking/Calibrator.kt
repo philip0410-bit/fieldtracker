@@ -87,6 +87,8 @@ object Calibrator {
         job = scope.launch {
             val samples = ArrayList<Fix>()
             val start = System.currentTimeMillis()
+            // Précision acceptée : 20 m idéalement, sinon on prend ce qui est disponible (max 150 m)
+            val limit = maxOf(MAX_ACCURACY_M, (GpsEngine.fix.value?.accuracy ?: MAX_ACCURACY_M) * 1.5f).coerceAtMost(150f)
             _message.value = null
             _progress.value = 0f
             WatchLink.pushState()
@@ -94,18 +96,22 @@ object Calibrator {
                 delay(150)
                 _progress.value = ((System.currentTimeMillis() - start).toFloat() / CAPTURE_MS).coerceAtMost(1f)
                 val f = GpsEngine.fix.value
-                if (f != null && GpsEngine.isFresh(f, 2500) && f.accuracy <= MAX_ACCURACY_M &&
+                if (f != null && GpsEngine.isFresh(f, 3000) && f.accuracy <= limit &&
                     samples.none { it.timeMs == f.timeMs }
                 ) samples.add(f)
             }
             _progress.value = null
-            if (samples.size < 2) {
-                _message.value = "Signal GPS insuffisant — reste immobile à découvert et réessaie."
+            // Localisation réseau : peu de mises à jour, on garde la dernière position récente
+            if (samples.isEmpty()) GpsEngine.fix.value?.takeIf { GpsEngine.isFresh(it, 15000) && it.accuracy <= 150f }?.let { samples.add(it) }
+            if (samples.isEmpty()) {
+                _message.value = "Aucune position reçue — active la localisation et mets-toi à découvert, puis réessaie."
                 Haptics.vibrate(ctx, Haptics.ALERT)
                 WatchLink.send(WatchLink.PATH_ALERT, "gps")
                 WatchLink.pushState()
                 return@launch
             }
+            val best = samples.minOf { it.accuracy }
+            if (best > MAX_ACCURACY_M) _message.value = "Coin enregistré avec une précision de ±${best.toInt()} m : le terrain sera approximatif."
             var wSum = 0.0; var lat = 0.0; var lon = 0.0
             for (s in samples) {
                 val w = 1.0 / (s.accuracy * s.accuracy).coerceAtLeast(1f)

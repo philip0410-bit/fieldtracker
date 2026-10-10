@@ -56,6 +56,7 @@ import com.philip.fieldtracker.tracking.TrackingService
 import com.philip.fieldtracker.ui.components.BigButton
 import com.philip.fieldtracker.ui.components.FieldCanvas
 import com.philip.fieldtracker.ui.components.GhostButton
+import com.philip.fieldtracker.ui.components.GpsPanel
 import com.philip.fieldtracker.ui.components.IconSquare
 import com.philip.fieldtracker.ui.components.KeyValue
 import com.philip.fieldtracker.ui.components.Label
@@ -118,20 +119,8 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Qualité GPS
-        Panel(padding = 12.dp) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Pill(if (fresh) "GPS actif" else "Recherche GPS…", if (gpsOk) p.primary else p.warning)
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    if (fresh) "Précision : ±${acc.toInt()} m" else "Précision : —",
-                    style = Type.label, color = p.text, modifier = Modifier.weight(1f)
-                )
-                SignalBars(if (!fresh) 0 else when { acc <= 4 -> 4; acc <= 8 -> 3; acc <= 15 -> 2; else -> 1 })
-            }
-            Spacer(Modifier.height(6.dp))
-            Label("Satellites : ${sats.first} utilisés / ${sats.second} visibles", style = Type.caption)
-        }
+        // Qualité GPS (avec bouton pour autoriser / activer la localisation)
+        GpsPanel("calibration-panel")
         Spacer(Modifier.height(12.dp))
 
         if (s.indoor) {
@@ -283,12 +272,12 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
             BigButton(
                 text = when {
                     progress != null -> "Mesure… ${((progress ?: 0f) * 100).toInt()} %"
-                    !fresh -> "En attente du GPS…"
-                    !gpsOk -> "Précision trop faible"
+                    !fresh -> "OK — baliser (attente GPS)"
+                    !gpsOk -> "OK — baliser (±${acc.toInt()} m)"
                     else -> "OK — baliser ce coin"
                 },
                 icon = Icons.Filled.AddLocation,
-                enabled = gpsOk && progress == null,
+                enabled = progress == null,
                 onClick = { Calibrator.capture(s) },
             )
             Spacer(Modifier.height(10.dp))
@@ -334,22 +323,6 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
             GhostButton("Refaire le balisage", Modifier.fillMaxWidth(), Icons.Filled.Refresh) { Calibrator.reset() }
         }
         Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-fun SignalBars(level: Int) {
-    val p = LocalPalette.current
-    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-        for (i in 1..4) {
-            Box(
-                Modifier
-                    .width(5.dp)
-                    .height((6 + i * 4).dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(if (i <= level) p.primary else p.elevated)
-            )
-        }
     }
 }
 

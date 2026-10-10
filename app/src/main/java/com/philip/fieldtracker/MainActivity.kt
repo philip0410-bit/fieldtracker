@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -134,7 +135,7 @@ fun AppRoot() {
 
     Scaffold(
         containerColor = p.bg,
-        topBar = { TopBar(tab) },
+        topBar = { TopBar(tab, onGpsClick = { tab = Tab.CALIB }) },
         bottomBar = {
             NavigationBar(containerColor = p.surface, tonalElevation = 0.dp) {
                 Tab.entries.forEach { t ->
@@ -167,7 +168,7 @@ fun AppRoot() {
 }
 
 @Composable
-private fun TopBar(tab: Tab) {
+private fun TopBar(tab: Tab, onGpsClick: () -> Unit) {
     val p = LocalPalette.current
     val fix by GpsEngine.fix.collectAsState()
     val nodes by WatchLink.nodes.collectAsState()
@@ -198,8 +199,9 @@ private fun TopBar(tab: Tab) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Pill(
-                if (fresh) "GPS ±${fix?.accuracy?.toInt() ?: 0} m" else "GPS —",
-                if (fresh) (if ((fix?.accuracy ?: 99f) <= 8f) p.primary else p.warning) else p.muted,
+                if (fresh) "GPS ±${fix?.accuracy?.toInt() ?: 0} m" else "GPS — activer",
+                if (fresh) (if ((fix?.accuracy ?: 99f) <= 8f) p.primary else p.warning) else p.secondary,
+                modifier = Modifier.clickable(onClick = onGpsClick),
             )
             if (hrFresh) Pill("♥ $hr", p.secondary)
             else Pill(if (nodes.isNotEmpty()) "Montre" else "Montre —", if (nodes.isNotEmpty()) p.primary else p.muted)
