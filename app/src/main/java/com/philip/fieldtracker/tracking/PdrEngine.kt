@@ -46,6 +46,7 @@ object PdrEngine : SensorEventListener {
 
     private val handler = Handler(Looper.getMainLooper())
     private var running = false
+    private var surveying = false
 
     private val ticker = object : Runnable {
         override fun run() {
@@ -71,8 +72,39 @@ object PdrEngine : SensorEventListener {
     }
 
     fun stopCompass() {
+        if (!running && !surveying) sm?.unregisterListener(this)
+    }
+
+    /**
+     * Balisage sans GPS : on part du coin 1 (position 0, 0) et on mesure
+     * le trajet jusqu'aux coins suivants avec les pas et la boussole.
+     */
+    fun startSurvey(ctx: Context) {
+        x = 0.0; y = 0.0
+        distSinceAnchor = 0.0
+        stepTimes.clear()
+        _steps.value = 0
+        val m = ctx.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        sm = m
+        m.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)?.let { m.registerListener(this, it, SensorManager.SENSOR_DELAY_FASTEST) }
+        m.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.let { m.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        surveying = true
+    }
+
+    /** Position actuelle mesurée depuis le coin 1. */
+    fun surveyPoint(): LatLon = Geo.fromLocal(SURVEY_ORIGIN, x, y)
+
+    /** Distance parcourue depuis le dernier coin validé. */
+    fun distanceSinceMark(): Double = distSinceAnchor
+
+    fun markSurvey() { distSinceAnchor = 0.0; _steps.value = 0 }
+
+    fun stopSurvey() {
+        surveying = false
         if (!running) sm?.unregisterListener(this)
     }
+
+    val SURVEY_ORIGIN = LatLon(0.0, 0.0)
 
     /** Démarre l'estimation de position, en partant du point (u, v) du terrain. */
     fun start(ctx: Context, c: Calibration, startU: Double = 0.0, startV: Double = 0.0) {
@@ -123,7 +155,7 @@ object PdrEngine : SensorEventListener {
                 if (diff < -180) diff += 360
                 _heading.value = ((prev + diff * 0.25f) + 360f) % 360f
             }
-            Sensor.TYPE_STEP_DETECTOR -> if (running) onStep()
+            Sensor.TYPE_STEP_DETECTOR -> if (running || surveying) onStep()
         }
     }
 
@@ -148,7 +180,7 @@ object PdrEngine : SensorEventListener {
         _steps.value = _steps.value + 1
         val dt = if (lastStepMs > 0) ((now - lastStepMs) / 1000.0).coerceIn(0.2, 2.0) else 0.6
         lastStepMs = now
-        emit(stride / dt)
+        if (running) emit(stride / dt)
     }
 
     private fun emit(speed: Double) {
@@ -169,21 +201,4 @@ object PdrEngine : SensorEventListener {
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
-    /**
-     * Terrain sans GPS : construit à partir des dimensions et de la direction
-     * de la boussole, depuis le coin 1 en regardant vers le coin 2 (grande ligne).
-     * Le terrain est à droite (tour dans le sens des aiguilles d'une montre).
-     */
-    fun buildCalibration(lengthM: Double, widthM: Double, headingDeg: Float): Calibration {
-        val o = LatLon(0.0, 0.0)
-        val h = Math.toRadians(headingDeg.toDouble())
-        val dir = doubleArrayOf(sin(h), cos(h))
-        val right = doubleArrayOf(cos(h), -sin(h))
-        fun pt(a: Double, b: Double) = Geo.fromLocal(o, a, b)
-        val c1 = pt(0.0, 0.0)
-        val c2 = pt(dir[0] * lengthM, dir[1] * lengthM)
-        val c3 = pt(dir[0] * lengthM + right[0] * widthM, dir[1] * lengthM + right[1] * widthM)
-        val c4 = pt(right[0] * widthM, right[1] * widthM)
-        return Calibration(listOf(c1, c2, c3, c4), estimated = true)
-    }
 }

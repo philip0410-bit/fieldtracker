@@ -81,6 +81,19 @@ object Calibrator {
         WatchLink.pushState()
     }
 
+    /** Mode sans GPS : enregistre le coin courant à la position estimée par les pas. */
+    fun setCornerManual(sport: Sport, p: LatLon) {
+        val idx = currentIndex
+        if (idx >= 4) return
+        _corners.value = _corners.value.toMutableList().also { it[idx] = p }
+        Haptics.vibrate(AppState.appContext, Haptics.DOUBLE)
+        if (currentIndex >= 4) {
+            _calibration.value = Calibration.normalized(_corners.value.filterNotNull(), sport.lengthM > sport.widthM)
+            _message.value = null
+        }
+        WatchLink.pushState()
+    }
+
     /** Mesure le coin courant : moyenne des positions GPS pendant [CAPTURE_MS]. */
     fun capture(sport: Sport) {
         if (_progress.value != null || currentIndex >= 4) return

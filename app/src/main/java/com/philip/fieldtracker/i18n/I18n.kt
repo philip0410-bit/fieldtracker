@@ -337,6 +337,8 @@ object I18n {
         "Terrain créé sans GPS" to "Field created without GPS",
         "Départ : coin 1 (là où tu es)." to "Start: corner 1 (where you are).",
         "Sans GPS : touche le terrain à l'endroit où tu es pour recaler ta position." to "No GPS: tap the field where you are to recalibrate your position.",
+        "Depuis le coin précédent : %d pas · %.0f m" to "Since previous corner: %d steps · %.0f m",
+        "Départ : au dernier coin balisé (là où tu es)." to "Start: at the last marked corner (where you are).",
     )
 
     private val KO: Map<String, String> = mapOf(
@@ -647,6 +649,8 @@ object I18n {
         "Terrain créé sans GPS" to "GPS 없이 경기장 생성됨",
         "Départ : coin 1 (là où tu es)." to "출발: 코너 1 (현재 위치).",
         "Sans GPS : touche le terrain à l'endroit où tu es pour recaler ta position." to "GPS 없음: 현재 위치를 경기장에서 눌러 위치를 보정하세요.",
+        "Depuis le coin précédent : %d pas · %.0f m" to "이전 코너부터: %d걸음 · %.0f m",
+        "Départ : au dernier coin balisé (là où tu es)." to "출발: 마지막으로 설정한 코너 (현재 위치).",
     )
 }
 

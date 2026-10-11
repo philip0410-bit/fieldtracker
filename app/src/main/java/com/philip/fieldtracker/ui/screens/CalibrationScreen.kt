@@ -370,27 +370,38 @@ fun PositionModeSelector() {
 }
 
 /**
- * Balisage sans GPS : dimensions du terrain + direction de la boussole prise
- * depuis le coin 1 en regardant le coin 2.
+ * Balisage sans GPS : comme en mode GPS, on passe par les 4 coins et on appuie
+ * sur OK à chacun. Les distances et directions entre les coins sont mesurées
+ * avec les pas et la boussole du téléphone.
  */
 @Composable
 private fun PdrCalibration(s: Sport, onStarted: () -> Unit) {
     val p = LocalPalette.current
     val ctx = LocalContext.current
     val heading by PdrEngine.heading.collectAsState()
+    val steps by PdrEngine.steps.collectAsState()
+    val corners by Calibrator.corners.collectAsState()
     val calibration by Calibrator.calibration.collectAsState()
-    var lengthTxt by remember(s.id) { mutableStateOf(s.lengthM.toInt().toString()) }
-    var widthTxt by remember(s.id) { mutableStateOf(s.widthM.toInt().toString()) }
     var granted by remember { mutableStateOf(hasActivityPermission(ctx)) }
     val permLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { granted = it }
     val available = remember { PdrEngine.isAvailable(ctx) }
+    val idx = corners.indexOfFirst { it == null }.let { if (it < 0) 4 else it }
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { delay(500); tick++ } }
 
+    LaunchedEffect(s.id) { Calibrator.prepare(s) }
     DisposableEffect(Unit) {
         PdrEngine.startCompass(ctx)
-        onDispose { PdrEngine.stopCompass() }
+        WatchLink.pushState(force = true)
+        onDispose { PdrEngine.stopSurvey(); PdrEngine.stopCompass() }
     }
+
+    val blink = rememberInfiniteTransition(label = "blink")
+    val pulse by blink.animateFloat(
+        0.25f, 1f, infiniteRepeatable(tween(650, easing = LinearEasing), RepeatMode.Reverse), label = "pulse"
+    )
 
     Column(
         Modifier
@@ -416,87 +427,112 @@ private fun PdrCalibration(s: Sport, onStarted: () -> Unit) {
             Text(tr("Ce téléphone n'a pas de podomètre ou de boussole : mode sans GPS impossible."), style = Type.body, color = p.secondary)
             return@Column
         }
-        if (!granted && android.os.Build.VERSION.SDK_INT >= 29) {
+        if (!granted) {
             GhostButton(tr("Autoriser la détection des pas"), Modifier.fillMaxWidth(), Icons.Filled.AddLocation, tint = p.primary) {
                 permLauncher.launch(android.Manifest.permission.ACTIVITY_RECOGNITION)
             }
             Spacer(Modifier.height(12.dp))
         }
 
-        // Dimensions du terrain
+        // Étape
         Panel {
-            Text(tr("Dimensions du terrain"), style = Type.h2, color = p.text)
-            Label(trf("Standard : %s", s.dims), style = Type.caption)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                androidx.compose.material3.OutlinedTextField(
-                    value = lengthTxt, onValueChange = { v -> lengthTxt = v.filter { it.isDigit() || it == '.' }.take(5) },
-                    modifier = Modifier.weight(1f), singleLine = true,
-                    label = { Text(tr("Longueur (m)"), style = Type.caption) },
-                    textStyle = Type.label.copy(color = p.text),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
-                    colors = fieldColors(),
-                )
-                androidx.compose.material3.OutlinedTextField(
-                    value = widthTxt, onValueChange = { v -> widthTxt = v.filter { it.isDigit() || it == '.' }.take(5) },
-                    modifier = Modifier.weight(1f), singleLine = true,
-                    label = { Text(tr("Largeur (m)"), style = Type.caption) },
-                    textStyle = Type.label.copy(color = p.text),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
-                    colors = fieldColors(),
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Pill(tr(s.name), p.primary, filled = true, modifier = Modifier.weight(1f, fill = false))
+                Spacer(Modifier.weight(1f))
+                Text(if (idx < 4) trf("Étape %d/4", idx + 1) else tr("Terminé"), style = Type.label, color = p.muted)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(if (idx < 4) tr(Calibrator.cornerNames[idx]) else tr("Terrain balisé"), style = Type.h1, color = p.text)
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Label(trf("Cap : %d°", heading.toInt()), color = p.primary, style = Type.caption)
+                if (idx in 1..3) Label(
+                    trf("Depuis le coin précédent : %d pas · %.0f m", steps, if (tick >= 0) PdrEngine.distanceSinceMark() else 0.0),
+                    color = p.primary, style = Type.caption
                 )
             }
         }
         Spacer(Modifier.height(12.dp))
 
-        // Orientation
-        Panel {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
-                    androidx.compose.foundation.Canvas(Modifier.size(64.dp)) {
-                        val c = center
-                        val r = size.minDimension / 2 - 4f
-                        drawCircle(p.border, r, c, style = Stroke(3f))
-                        val a = Math.toRadians((-heading).toDouble() - 90.0)
-                        // Nord affiché par rapport au téléphone
-                        val nx = c.x + (r - 6f) * kotlin.math.cos(a).toFloat()
-                        val ny = c.y + (r - 6f) * kotlin.math.sin(a).toFloat()
-                        drawLine(p.secondary, c, Offset(nx, ny), 5f)
-                        drawLine(p.primary, c, Offset(c.x, c.y - r + 4f), 3f)
+        // Terrain avec les 4 coins
+        FieldCanvas(s) { r ->
+            val pts = listOf(r.topLeft, Offset(r.right, r.top), r.bottomRight, Offset(r.left, r.bottom))
+            for (i in 0 until 4) {
+                val j = (i + 1) % 4
+                if (corners[i] != null && corners[j] != null) drawLine(p.primary, pts[i], pts[j], 5f)
+            }
+            pts.forEachIndexed { i, o ->
+                when {
+                    corners[i] != null -> {
+                        drawCircle(p.primary.copy(alpha = 0.25f), 26f, o)
+                        drawCircle(p.primary, 14f, o)
                     }
+                    i == idx -> {
+                        drawCircle(p.primary.copy(alpha = 0.18f * pulse), 30f + 22f * pulse, o)
+                        drawCircle(p.primary.copy(alpha = pulse), 15f, o, style = Stroke(5f))
+                    }
+                    else -> drawCircle(
+                        p.muted, 13f, o,
+                        style = Stroke(3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
+                    )
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(trf("Cap : %d°", heading.toInt()), style = Type.metric, color = p.text)
-                    Text(tr("Place-toi sur un coin, face au coin suivant le long de la grande ligne, le terrain à ta droite."), style = Type.caption, color = p.muted)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            tr("Commence par n'importe quel coin, puis fais le tour du terrain dans le sens des aiguilles d'une montre en longeant d'abord la grande ligne de côté."),
+            style = Type.caption, color = p.muted
+        )
+
+        // Côtés mesurés
+        val sides = (0 until 3).mapNotNull { i ->
+            val a = corners[i]; val b = corners[i + 1]
+            if (a != null && b != null) i to Geo.distance(a, b) else null
+        }
+        if (sides.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Panel(padding = 12.dp) {
+                sides.forEach { (i, d) ->
+                    val ref = if (i % 2 == 0) s.lengthM else s.widthM
+                    KeyValue(trf("Côté %d → %d", i + 1, i + 2), trf("%.1f m  (réf. %.0f m)", d, ref))
                 }
             }
         }
         Spacer(Modifier.height(14.dp))
 
         val cal = calibration
-        BigButton(
-            tr(if (cal == null) "Fixer l'orientation et créer le terrain" else "Refaire avec le cap actuel"),
-            icon = Icons.Filled.AddLocation,
-            color = if (cal == null) p.primary else p.elevated,
-            textColor = if (cal == null) p.onPrimary else p.text,
-        ) {
-            val l = lengthTxt.toDoubleOrNull()?.takeIf { it in 5.0..300.0 } ?: s.lengthM
-            val w = widthTxt.toDoubleOrNull()?.takeIf { it in 3.0..300.0 } ?: s.widthM
-            Calibrator.useCalibration(PdrEngine.buildCalibration(l, w, heading))
-        }
-        if (cal != null) {
-            Spacer(Modifier.height(14.dp))
+        if (cal == null) {
+            BigButton(
+                tr("OK — baliser ce coin"),
+                icon = Icons.Filled.AddLocation,
+                enabled = granted,
+            ) {
+                if (idx == 0) PdrEngine.startSurvey(ctx)
+                Calibrator.setCornerManual(s, PdrEngine.surveyPoint())
+                PdrEngine.markSurvey()
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GhostButton(tr("Annuler le coin"), Modifier.weight(1f), Icons.AutoMirrored.Filled.Undo) { Calibrator.undo() }
+                GhostButton(tr("Recommencer"), Modifier.weight(1f), Icons.Filled.Refresh) {
+                    Calibrator.reset(); PdrEngine.stopSurvey()
+                }
+            }
+        } else {
             Panel(accent = p.primary.copy(alpha = 0.6f)) {
                 Label(tr("Terrain créé sans GPS"), color = p.primary)
                 Text(String.format("%.0f × %.0f m", cal.lengthM, cal.widthM), style = Type.metric, color = p.text)
-                Text(tr("Départ : coin 1 (là où tu es)."), style = Type.caption, color = p.muted)
+                Text(tr("Départ : au dernier coin balisé (là où tu es)."), style = Type.caption, color = p.muted)
             }
             Spacer(Modifier.height(14.dp))
-            BigButton(tr("Start"), icon = Icons.Filled.PlayArrow, height = 72.dp, enabled = granted || android.os.Build.VERSION.SDK_INT < 29) {
+            BigButton(tr("Start"), icon = Icons.Filled.PlayArrow, height = 72.dp, enabled = granted) {
                 Tracker.start(s, cal)
                 TrackingService.start(ctx)
                 onStarted()
+            }
+            Spacer(Modifier.height(10.dp))
+            GhostButton(tr("Refaire le balisage"), Modifier.fillMaxWidth(), Icons.Filled.Refresh) {
+                Calibrator.reset(); PdrEngine.stopSurvey()
             }
         }
         Spacer(Modifier.height(24.dp))

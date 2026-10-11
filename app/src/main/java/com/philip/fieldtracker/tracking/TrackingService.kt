@@ -52,7 +52,11 @@ class TrackingService : Service() {
                 if (AppState.positionMode.value == "pdr") {
                     val cal = Calibrator.calibration.value
                     if (cal != null && !pdrRunning) {
-                        PdrEngine.start(this, cal, 0.0, 0.0)
+                        // Départ au dernier coin balisé (là où se trouve le joueur)
+                        val last = Calibrator.corners.value.lastOrNull { it != null }
+                        val uv = last?.let { cal.toUV(it) } ?: doubleArrayOf(0.0, 0.0)
+                        PdrEngine.stopSurvey()
+                        PdrEngine.start(this, cal, uv[0].coerceIn(0.0, 1.0), uv[1].coerceIn(0.0, 1.0))
                         pdrRunning = true
                         wakeLock = (getSystemService(Context.POWER_SERVICE) as android.os.PowerManager)
                             .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "fieldtracker:pdr")

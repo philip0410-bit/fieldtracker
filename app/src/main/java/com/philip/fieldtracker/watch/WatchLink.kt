@@ -129,7 +129,14 @@ object WatchLink {
         when (path) {
             PATH_CORNER -> AppState.sport.value?.let { sport ->
                 Calibrator.prepare(sport)
-                Calibrator.capture(sport)
+                if (AppState.positionMode.value == "pdr") {
+                    // Sans GPS : position estimée par les pas depuis le coin 1
+                    if (Calibrator.currentIndex == 0) com.philip.fieldtracker.tracking.PdrEngine.startSurvey(ctx)
+                    Calibrator.setCornerManual(sport, com.philip.fieldtracker.tracking.PdrEngine.surveyPoint())
+                    com.philip.fieldtracker.tracking.PdrEngine.markSurvey()
+                } else {
+                    Calibrator.capture(sport)
+                }
             }
             PATH_HR -> data.trim().toIntOrNull()?.let { HeartRateHub.push(it, tr("Montre")) }
             PATH_CMD -> when (data) {
