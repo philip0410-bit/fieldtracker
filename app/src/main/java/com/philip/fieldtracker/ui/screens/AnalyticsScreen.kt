@@ -52,6 +52,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -251,23 +257,20 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                 Chip("Trace", heatMode == 3) { heatMode = 3 }
             }
             Spacer(Modifier.height(10.dp))
+            val heatImg = remember(s.id, st) { thermalImage(st.heat) }
+            val heatHiImg = remember(s.id, st) { thermalImage(st.heatHi) }
             FieldCanvas(sport) { r ->
                 val cw = r.width / SessionStats.HX
                 val ch = r.height / SessionStats.HY
                 when (heatMode) {
                     0, 1 -> {
-                        val grid = if (heatMode == 0) st.heat else st.heatHi
-                        for (y in 0 until SessionStats.HY) for (x in 0 until SessionStats.HX) {
-                            val v = grid[y * SessionStats.HX + x]
-                            if (v > 0.04f) {
-                                val c = heatColor(v, p.tertiary, Color(0xFFFFD23F), p.secondary)
-                                drawCircle(
-                                    c.copy(alpha = (0.25f + 0.6f * v).coerceAtMost(0.85f)),
-                                    radius = maxOf(cw, ch) * (0.55f + 0.5f * v),
-                                    center = Offset(r.left + (x + 0.5f) * cw, r.top + (y + 0.5f) * ch)
-                                )
-                            }
-                        }
+                        val img = if (heatMode == 0) heatImg else heatHiImg
+                        drawImage(
+                            img,
+                            dstOffset = IntOffset(r.left.toInt(), r.top.toInt()),
+                            dstSize = IntSize(r.width.toInt(), r.height.toInt()),
+                            filterQuality = FilterQuality.High,
+                        )
                     }
                     2 -> st.sprints.forEach { sp ->
                         val o = Offset(r.left + sp.u.toFloat().coerceIn(0f, 1f) * r.width, r.top + sp.v.toFloat().coerceIn(0f, 1f) * r.height)
@@ -295,7 +298,7 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                     val n = 30
                     for (i in 0 until n) {
                         drawRect(
-                            heatColor(i / (n - 1f), p.tertiary, Color(0xFFFFD23F), p.secondary),
+                            thermal(i / (n - 1f)),
                             topLeft = Offset(size.width * i / n, 0f), size = Size(size.width / n + 1, size.height)
                         )
                     }
@@ -477,8 +480,60 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
     }
 }
 
-private fun heatColor(v: Float, low: Color, mid: Color, high: Color): Color =
-    if (v < 0.5f) lerp(low, mid, v * 2f) else lerp(mid, high, (v - 0.5f) * 2f)
+/** Dégradé type caméra thermique : vert -> jaune -> orange -> rouge. */
+private val thermalStops = listOf(
+    0.00f to Color(0xFF16A34A),
+    0.35f to Color(0xFF84CC16),
+    0.55f to Color(0xFFFACC15),
+    0.75f to Color(0xFFF97316),
+    1.00f to Color(0xFFDC2626),
+)
+
+private fun thermal(v: Float): Color {
+    val x = v.coerceIn(0f, 1f)
+    for (i in 1 until thermalStops.size) {
+        val (p1, c1) = thermalStops[i - 1]
+        val (p2, c2) = thermalStops[i]
+        if (x <= p2) return lerp(c1, c2, (x - p1) / (p2 - p1))
+    }
+    return thermalStops.last().second
+}
+
+/**
+ * Carte de chaleur lisse : la grille de présence est agrandie par interpolation
+ * bilinéaire puis colorée du vert (peu de temps) au rouge (zone la plus occupée).
+ */
+private fun thermalImage(grid: FloatArray): ImageBitmap {
+    val gw = SessionStats.HX
+    val gh = SessionStats.HY
+    val scale = 6
+    val w = gw * scale
+    val h = gh * scale
+    val pixels = IntArray(w * h)
+    for (py in 0 until h) {
+        val gy = ((py + 0.5f) / scale - 0.5f).coerceIn(0f, gh - 1f)
+        val y0 = gy.toInt().coerceAtMost(gh - 2).coerceAtLeast(0)
+        val fy = (gy - y0).coerceIn(0f, 1f)
+        for (px in 0 until w) {
+            val gx = ((px + 0.5f) / scale - 0.5f).coerceIn(0f, gw - 1f)
+            val x0 = gx.toInt().coerceAtMost(gw - 2).coerceAtLeast(0)
+            val fx = (gx - x0).coerceIn(0f, 1f)
+            val a = grid[y0 * gw + x0]
+            val b = grid[y0 * gw + x0 + 1]
+            val c = grid[(y0 + 1) * gw + x0]
+            val d = grid[(y0 + 1) * gw + x0 + 1]
+            val v = (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy
+            pixels[py * w + px] = if (v < 0.02f) 0 else {
+                val col = thermal(v)
+                val alpha = (0.35f + 0.45f * v).coerceAtMost(0.8f)
+                col.copy(alpha = alpha).toArgb()
+            }
+        }
+    }
+    val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+    bmp.setPixels(pixels, 0, w, 0, 0, w, h)
+    return bmp.asImageBitmap()
+}
 
 @Composable
 private fun IntensityChart(values: List<Double>) {
