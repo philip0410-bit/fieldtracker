@@ -24,6 +24,10 @@ object AppState {
     private val _outAlert = MutableStateFlow(true)
     val outAlert: StateFlow<Boolean> = _outAlert
 
+    /** "gps" (satellites) ou "pdr" (sans GPS : podomètre + boussole). */
+    private val _positionMode = MutableStateFlow("gps")
+    val positionMode: StateFlow<String> = _positionMode
+
     private val _keepScreenOn = MutableStateFlow(true)
     val keepScreenOn: StateFlow<Boolean> = _keepScreenOn
 
@@ -43,6 +47,7 @@ object AppState {
         _theme.value = prefs.getString("theme", "system") ?: "system"
         _outAlert.value = prefs.getBoolean("outAlert", true)
         _keepScreenOn.value = prefs.getBoolean("keepScreenOn", true)
+        _positionMode.value = prefs.getString("positionMode", "gps") ?: "gps"
         _profile.value = Profile(
             age = prefs.getInt("age", 30),
             weightKg = prefs.getFloat("weight", 75f).toDouble(),
@@ -53,6 +58,11 @@ object AppState {
         val device = java.util.Locale.getDefault().language
         val defLang = if (device == "ko" || device == "en") device else "fr"
         com.philip.fieldtracker.i18n.I18n.setLang(prefs.getString("lang", defLang) ?: defLang)
+    }
+
+    fun setPositionMode(m: String) {
+        _positionMode.value = m
+        prefs.edit().putString("positionMode", m).apply()
     }
 
     fun setLang(l: String) {

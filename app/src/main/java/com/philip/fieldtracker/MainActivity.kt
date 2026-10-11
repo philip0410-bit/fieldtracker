@@ -207,6 +207,31 @@ private fun TopBar(tab: Tab, onGpsClick: () -> Unit) {
             )
             if (hrFresh) Pill("♥ $hr", p.secondary)
             else Pill(if (nodes.isNotEmpty()) tr("Montre") else tr("Montre —"), if (nodes.isNotEmpty()) p.primary else p.muted)
+            LanguageMenu()
+        }
+    }
+}
+
+
+/** Sélecteur de langue toujours visible en haut de l'écran. */
+@Composable
+private fun LanguageMenu() {
+    val p = LocalPalette.current
+    var open by remember { mutableStateOf(false) }
+    val lang = com.philip.fieldtracker.i18n.I18n.lang
+    Box {
+        Pill(lang.uppercase(), p.text, modifier = Modifier.clickable { open = true })
+        androidx.compose.material3.DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            containerColor = p.elevated,
+        ) {
+            com.philip.fieldtracker.i18n.I18n.languages.forEach { (code, label) ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(label, style = Type.bodyBold, color = if (code == lang) p.primary else p.text) },
+                    onClick = { AppState.setLang(code); open = false },
+                )
+            }
         }
     }
 }

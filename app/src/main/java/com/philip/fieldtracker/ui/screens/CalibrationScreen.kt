@@ -54,6 +54,9 @@ import com.philip.fieldtracker.data.Geo
 import com.philip.fieldtracker.tracking.Calibrator
 import com.philip.fieldtracker.tracking.GpsEngine
 import com.philip.fieldtracker.tracking.Tracker
+import com.philip.fieldtracker.ui.components.Chip
+import com.philip.fieldtracker.data.Sport
+import com.philip.fieldtracker.tracking.PdrEngine
 import com.philip.fieldtracker.tracking.TrackingService
 import com.philip.fieldtracker.ui.components.BigButton
 import com.philip.fieldtracker.ui.components.FieldCanvas
@@ -90,6 +93,12 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
         return
     }
 
+    val mode by AppState.positionMode.collectAsState()
+    if (mode == "pdr") {
+        PdrCalibration(s, onStarted)
+        return
+    }
+
     DisposableEffect(Unit) {
         GpsEngine.start(ctx, "calibration")
         WatchLink.pushState(force = true)
@@ -121,6 +130,8 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
+        PositionModeSelector()
+        Spacer(Modifier.height(12.dp))
         // Qualité GPS (avec bouton pour autoriser / activer la localisation)
         GpsPanel("calibration-panel")
         Spacer(Modifier.height(12.dp))
@@ -343,3 +354,156 @@ fun EmptyState(title: String, text: String, button: String, onClick: () -> Unit)
         BigButton(button, onClick = onClick)
     }
 }
+
+
+/** Choix GPS / sans GPS. */
+@Composable
+fun PositionModeSelector() {
+    val p = LocalPalette.current
+    val mode by AppState.positionMode.collectAsState()
+    Label(tr("Mode de positionnement"), style = Type.caption)
+    Spacer(Modifier.height(6.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Chip(tr("GPS (précis)"), mode == "gps") { AppState.setPositionMode("gps"); Calibrator.reset() }
+        Chip(tr("Sans GPS (expérimental)"), mode == "pdr") { AppState.setPositionMode("pdr"); Calibrator.reset() }
+    }
+}
+
+/**
+ * Balisage sans GPS : dimensions du terrain + direction de la boussole prise
+ * depuis le coin 1 en regardant le coin 2.
+ */
+@Composable
+private fun PdrCalibration(s: Sport, onStarted: () -> Unit) {
+    val p = LocalPalette.current
+    val ctx = LocalContext.current
+    val heading by PdrEngine.heading.collectAsState()
+    val calibration by Calibrator.calibration.collectAsState()
+    var lengthTxt by remember(s.id) { mutableStateOf(s.lengthM.toInt().toString()) }
+    var widthTxt by remember(s.id) { mutableStateOf(s.widthM.toInt().toString()) }
+    var granted by remember { mutableStateOf(hasActivityPermission(ctx)) }
+    val permLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted = it }
+    val available = remember { PdrEngine.isAvailable(ctx) }
+
+    DisposableEffect(Unit) {
+        PdrEngine.startCompass(ctx)
+        onDispose { PdrEngine.stopCompass() }
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        PositionModeSelector()
+        Spacer(Modifier.height(12.dp))
+        Panel(accent = p.warning.copy(alpha = 0.6f), padding = 12.dp) {
+            Text(tr("Mode expérimental"), style = Type.bodyBold, color = p.warning)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                tr("Sans GPS, la position est estimée avec le podomètre et la boussole du téléphone. L'erreur augmente avec le temps : pendant la séance, touche le terrain à l'endroit où tu es (coin, centre, ligne) pour recaler ta position."),
+                style = Type.body, color = p.text
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(tr("Garde le téléphone tenu ou fixé à plat, écran vers le haut et haut du téléphone dans le sens de ta course."), style = Type.caption, color = p.muted)
+        }
+        Spacer(Modifier.height(12.dp))
+
+        if (!available) {
+            Text(tr("Ce téléphone n'a pas de podomètre ou de boussole : mode sans GPS impossible."), style = Type.body, color = p.secondary)
+            return@Column
+        }
+        if (!granted && android.os.Build.VERSION.SDK_INT >= 29) {
+            GhostButton(tr("Autoriser la détection des pas"), Modifier.fillMaxWidth(), Icons.Filled.AddLocation, tint = p.primary) {
+                permLauncher.launch(android.Manifest.permission.ACTIVITY_RECOGNITION)
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // Dimensions du terrain
+        Panel {
+            Text(tr("Dimensions du terrain"), style = Type.h2, color = p.text)
+            Label(trf("Standard : %s", s.dims), style = Type.caption)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = lengthTxt, onValueChange = { v -> lengthTxt = v.filter { it.isDigit() || it == '.' }.take(5) },
+                    modifier = Modifier.weight(1f), singleLine = true,
+                    label = { Text(tr("Longueur (m)"), style = Type.caption) },
+                    textStyle = Type.label.copy(color = p.text),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    colors = fieldColors(),
+                )
+                androidx.compose.material3.OutlinedTextField(
+                    value = widthTxt, onValueChange = { v -> widthTxt = v.filter { it.isDigit() || it == '.' }.take(5) },
+                    modifier = Modifier.weight(1f), singleLine = true,
+                    label = { Text(tr("Largeur (m)"), style = Type.caption) },
+                    textStyle = Type.label.copy(color = p.text),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    colors = fieldColors(),
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+
+        // Orientation
+        Panel {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+                    androidx.compose.foundation.Canvas(Modifier.size(64.dp)) {
+                        val c = center
+                        val r = size.minDimension / 2 - 4f
+                        drawCircle(p.border, r, c, style = Stroke(3f))
+                        val a = Math.toRadians((-heading).toDouble() - 90.0)
+                        // Nord affiché par rapport au téléphone
+                        val nx = c.x + (r - 6f) * kotlin.math.cos(a).toFloat()
+                        val ny = c.y + (r - 6f) * kotlin.math.sin(a).toFloat()
+                        drawLine(p.secondary, c, Offset(nx, ny), 5f)
+                        drawLine(p.primary, c, Offset(c.x, c.y - r + 4f), 3f)
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(trf("Cap : %d°", heading.toInt()), style = Type.metric, color = p.text)
+                    Text(tr("Place-toi sur un coin, face au coin suivant le long de la grande ligne, le terrain à ta droite."), style = Type.caption, color = p.muted)
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+
+        val cal = calibration
+        BigButton(
+            tr(if (cal == null) "Fixer l'orientation et créer le terrain" else "Refaire avec le cap actuel"),
+            icon = Icons.Filled.AddLocation,
+            color = if (cal == null) p.primary else p.elevated,
+            textColor = if (cal == null) p.onPrimary else p.text,
+        ) {
+            val l = lengthTxt.toDoubleOrNull()?.takeIf { it in 5.0..300.0 } ?: s.lengthM
+            val w = widthTxt.toDoubleOrNull()?.takeIf { it in 3.0..300.0 } ?: s.widthM
+            Calibrator.useCalibration(PdrEngine.buildCalibration(l, w, heading))
+        }
+        if (cal != null) {
+            Spacer(Modifier.height(14.dp))
+            Panel(accent = p.primary.copy(alpha = 0.6f)) {
+                Label(tr("Terrain créé sans GPS"), color = p.primary)
+                Text(String.format("%.0f × %.0f m", cal.lengthM, cal.widthM), style = Type.metric, color = p.text)
+                Text(tr("Départ : coin 1 (là où tu es)."), style = Type.caption, color = p.muted)
+            }
+            Spacer(Modifier.height(14.dp))
+            BigButton(tr("Start"), icon = Icons.Filled.PlayArrow, height = 72.dp, enabled = granted || android.os.Build.VERSION.SDK_INT < 29) {
+                Tracker.start(s, cal)
+                TrackingService.start(ctx)
+                onStarted()
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+private fun hasActivityPermission(ctx: android.content.Context): Boolean =
+    android.os.Build.VERSION.SDK_INT < 29 || androidx.core.content.ContextCompat.checkSelfPermission(
+        ctx, android.Manifest.permission.ACTIVITY_RECOGNITION
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED

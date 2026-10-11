@@ -42,13 +42,25 @@ class TrackingService : Service() {
             ACTION_STOP -> {
                 Tracker.stop(this)
                 GpsEngine.stop(TAG)
+                stopPdr()
                 ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
             }
             else -> {
                 startInForeground()
-                GpsEngine.start(this, TAG)
+                if (AppState.positionMode.value == "pdr") {
+                    val cal = Calibrator.calibration.value
+                    if (cal != null && !pdrRunning) {
+                        PdrEngine.start(this, cal, 0.0, 0.0)
+                        pdrRunning = true
+                        wakeLock = (getSystemService(Context.POWER_SERVICE) as android.os.PowerManager)
+                            .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "fieldtracker:pdr")
+                            .apply { acquire(4 * 60 * 60 * 1000L) }
+                    }
+                } else {
+                    GpsEngine.start(this, TAG)
+                }
                 if (ticker == null) {
                     ticker = scope.launch {
                         while (isActive) {
@@ -56,6 +68,7 @@ class TrackingService : Service() {
                             WatchLink.pushState()
                             if (!Tracker.isActive) {
                                 GpsEngine.stop(TAG)
+                                stopPdr()
                                 ServiceCompat.stopForeground(this@TrackingService, ServiceCompat.STOP_FOREGROUND_REMOVE)
                                 stopSelf()
                                 break
@@ -66,6 +79,16 @@ class TrackingService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    private var pdrRunning = false
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
+
+    private fun stopPdr() {
+        if (pdrRunning) PdrEngine.stop()
+        pdrRunning = false
+        try { wakeLock?.release() } catch (_: Exception) {}
+        wakeLock = null
     }
 
     private fun startInForeground() {
@@ -91,11 +114,16 @@ class TrackingService : Service() {
             .build()
         ServiceCompat.startForeground(
             this, NOTIF_ID, n,
-            if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
+            when {
+                Build.VERSION.SDK_INT >= 34 && AppState.positionMode.value == "pdr" -> ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+                Build.VERSION.SDK_INT >= 29 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                else -> 0
+            }
         )
     }
 
     override fun onDestroy() {
+        stopPdr()
         scope.cancel()
         super.onDestroy()
     }

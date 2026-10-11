@@ -65,7 +65,8 @@ object GpsEngine {
             now,
             if (isGps) "gps" else "network",
         )
-        Tracker.onLocation(loc)
+        // En mode sans GPS, c'est le podomètre qui alimente le suivi
+        if (com.philip.fieldtracker.data.AppState.positionMode.value == "gps") Tracker.onLocation(loc)
     }
 
     private val gnssCallback = object : GnssStatus.Callback() {

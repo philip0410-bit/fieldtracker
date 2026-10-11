@@ -206,8 +206,24 @@ fun LiveScreen(onGoCalib: () -> Unit) {
             }
             Spacer(Modifier.height(12.dp))
 
-            // Terrain + trace
-            Box {
+            // Terrain + trace (mode sans GPS : toucher le terrain recale la position)
+            val pdr = AppState.positionMode.collectAsState().value == "pdr"
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            if (pdr) {
+                Text(tr("Sans GPS : touche le terrain à l'endroit où tu es pour recaler ta position."), style = Type.caption, color = p.warning)
+                Spacer(Modifier.height(6.dp))
+            }
+            Box(
+                if (!pdr) Modifier else Modifier.pointerInput(Unit) {
+                    detectTapGestures { o ->
+                        val ins = with(density) { 18.dp.toPx() }
+                        val u = ((o.x - ins) / (size.width - 2 * ins)).coerceIn(0f, 1f)
+                        val v = ((o.y - ins) / (size.height - 2 * ins)).coerceIn(0f, 1f)
+                        com.philip.fieldtracker.tracking.PdrEngine.anchor(u.toDouble(), v.toDouble())
+                        com.philip.fieldtracker.tracking.Haptics.vibrate(ctx, com.philip.fieldtracker.tracking.Haptics.SHORT)
+                    }
+                }
+            ) {
                 FieldCanvas(s) { r ->
                     fun pt(u: Float, v: Float) = Offset(r.left + u.coerceIn(-0.05f, 1.05f) * r.width, r.top + v.coerceIn(-0.05f, 1.05f) * r.height)
                     val trail = live.trail
