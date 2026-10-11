@@ -34,6 +34,7 @@ data class PhoneState(
     val zone: String = "",
     val kcal: Double = 0.0,
     val sprints: Int = 0,
+    val lang: String = "fr",
 )
 
 data class Summary(val distM: Double, val vmax: Double, val sprints: Int, val activeMs: Long, val at: Long)
@@ -71,6 +72,7 @@ object WatchState {
                     zone = o.optString("zone", ""),
                     kcal = o.optDouble("kcal", 0.0),
                     sprints = o.optInt("sprints", 0),
+                    lang = o.optString("lang", prev.lang),
                 )
                 // Coin validé -> double vibration au poignet
                 if (next.phase == prev.phase && next.corner > prev.corner) vibrate(ctx, longArrayOf(0, 80, 90, 80))
@@ -124,5 +126,30 @@ object WatchState {
 class WatchListenerService : WearableListenerService() {
     override fun onMessageReceived(event: MessageEvent) {
         WatchState.onMessage(this, event.path, String(event.data))
+    }
+}
+
+/** Textes de la montre en français, anglais et coréen (langue choisie sur le téléphone). */
+object WatchText {
+    private val table = mapOf(
+        "Ouvre l'app sur le téléphone" to ("Open the app on your phone" to "휴대폰에서 앱을 여세요"),
+        "Choisis ton sport sur le téléphone" to ("Choose your sport on the phone" to "휴대폰에서 스포츠를 선택하세요"),
+        "COIN %d/4" to ("CORNER %d/4" to "코너 %d/4"),
+        "Mesure… reste immobile" to ("Measuring… stay still" to "측정 중… 움직이지 마세요"),
+        "GPS faible, réessaie" to ("Weak GPS, try again" to "GPS 약함, 다시 시도"),
+        "Terrain balisé" to ("Field marked" to "경기장 설정 완료"),
+        "START" to ("START" to "시작"),
+        "DANS LE TERRAIN" to ("INSIDE FIELD" to "경기장 안"),
+        "HORS TERRAIN" to ("OUT OF BOUNDS" to "경기장 밖"),
+        "maintenir ■ pour terminer" to ("hold ■ to finish" to "■ 길게 눌러 종료"),
+        "Séance terminée" to ("Session finished" to "운동 종료"),
+        "%d sprints" to ("%d sprints" to "스프린트 %d회"),
+        "Bilan complet sur le téléphone" to ("Full report on the phone" to "전체 리포트는 휴대폰에서"),
+    )
+
+    fun t(fr: String, lang: String): String = when (lang) {
+        "en" -> table[fr]?.first ?: fr
+        "ko" -> table[fr]?.second ?: fr
+        else -> fr
     }
 }

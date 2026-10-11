@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.data
 
+import com.philip.fieldtracker.i18n.tr
+
 /** Tracé du terrain dessiné à l'écran. */
 enum class FieldLayout {
     SOCCER, FUTSAL, HANDBALL, RUGBY, AMERICAN, GAELIC, FIELD_HOCKEY, ICE_HOCKEY,
@@ -45,9 +47,9 @@ data class Sport(
         ZoneMode.GOALS -> listOf("Défense", "Milieu", "Attaque")
         ZoneMode.NET -> listOf("Fond A", "Zone filet", "Fond B")
         ZoneMode.GENERIC -> listOf("Zone 1", "Zone 2", "Zone 3")
-    }
+    }.map { tr(it) }
 
-    fun zoneLabelsWidth(): List<String> = listOf("Gauche", "Axe", "Droite")
+    fun zoneLabelsWidth(): List<String> = listOf("Gauche", "Axe", "Droite").map { tr(it) }
 }
 
 object Sports {

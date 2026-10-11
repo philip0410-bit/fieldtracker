@@ -1,5 +1,7 @@
 package com.philip.fieldtracker
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import android.Manifest
 import android.app.Application
 import android.os.Build
@@ -138,12 +140,12 @@ fun AppRoot() {
         topBar = { TopBar(tab, onGpsClick = { tab = Tab.CALIB }) },
         bottomBar = {
             NavigationBar(containerColor = p.surface, tonalElevation = 0.dp) {
-                Tab.entries.forEach { t ->
+                Tab.entries.forEach { tb ->
                     NavigationBarItem(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        icon = { Icon(t.icon, null) },
-                        label = { Text(t.label.uppercase(), style = Type.caption) },
+                        selected = tab == tb,
+                        onClick = { tab = tb },
+                        icon = { Icon(tb.icon, null) },
+                        label = { Text(tr(tb.label).uppercase(), style = Type.caption) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = p.primary,
                             selectedTextColor = p.primary,
@@ -195,16 +197,16 @@ private fun TopBar(tab: Tab, onGpsClick: () -> Unit) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text("FIELDTRACKER", style = Type.bodyBold.copy(fontSize = 16.sp), color = p.text, maxLines = 1)
-            Text(tab.label, style = Type.caption, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(tr(tab.label), style = Type.caption, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Pill(
-                if (fresh) "GPS ±${fix?.accuracy?.toInt() ?: 0} m" else "GPS — activer",
+                if (fresh) trf("GPS ±%d m", fix?.accuracy?.toInt() ?: 0) else tr("GPS — activer"),
                 if (fresh) (if ((fix?.accuracy ?: 99f) <= 8f) p.primary else p.warning) else p.secondary,
                 modifier = Modifier.clickable(onClick = onGpsClick),
             )
             if (hrFresh) Pill("♥ $hr", p.secondary)
-            else Pill(if (nodes.isNotEmpty()) "Montre" else "Montre —", if (nodes.isNotEmpty()) p.primary else p.muted)
+            else Pill(if (nodes.isNotEmpty()) tr("Montre") else tr("Montre —"), if (nodes.isNotEmpty()) p.primary else p.muted)
         }
     }
 }

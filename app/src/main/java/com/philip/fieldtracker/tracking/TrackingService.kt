@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.tracking
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -70,18 +72,18 @@ class TrackingService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, "Séance en cours", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL, tr("Séance en cours"), NotificationManager.IMPORTANCE_LOW)
             )
         }
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        val sport = Tracker.live.value.sport?.name ?: "Séance"
+        val sport = Tracker.live.value.sport?.name?.let { tr(it) } ?: tr("Séance")
         val n: Notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_fg)
             .setContentTitle("FieldTracker – $sport")
-            .setContentText("Suivi GPS du terrain en cours")
+            .setContentText(tr("Suivi GPS du terrain en cours"))
             .setOngoing(true)
             .setUsesChronometer(true)
             .setWhen(Tracker.live.value.startMs.takeIf { it > 0 } ?: System.currentTimeMillis())

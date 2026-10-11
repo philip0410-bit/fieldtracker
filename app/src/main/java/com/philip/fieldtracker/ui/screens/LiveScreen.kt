@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.ui.screens
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -102,18 +104,18 @@ fun LiveScreen(onGoCalib: () -> Unit) {
         val cal = calibration
         if (s == null || cal == null) {
             EmptyState(
-                "Terrain non balisé",
-                "Avant de commencer, balise les 4 coins du terrain.",
-                "Aller au balisage", onGoCalib
+                tr("Terrain non balisé"),
+                tr("Avant de commencer, balise les 4 coins du terrain."),
+                tr("Aller au balisage"), onGoCalib
             )
         } else {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                Text(s.name, style = Type.h1, color = p.text)
-                Label(String.format("Terrain balisé : %.0f × %.0f m", cal.lengthM, cal.widthM), color = p.primary)
+                Text(tr(s.name), style = Type.h1, color = p.text)
+                Label(trf("Terrain balisé : %.0f × %.0f m", cal.lengthM, cal.widthM), color = p.primary)
                 Spacer(Modifier.height(14.dp))
                 FieldCanvas(s, lineColor = p.primary.copy(alpha = 0.7f))
                 Spacer(Modifier.height(20.dp))
-                BigButton("Start", icon = Icons.Filled.PlayArrow, height = 76.dp) {
+                BigButton(tr("Start"), icon = Icons.Filled.PlayArrow, height = 76.dp) {
                     Tracker.start(s, cal)
                     TrackingService.start(ctx)
                 }
@@ -148,28 +150,28 @@ fun LiveScreen(onGoCalib: () -> Unit) {
         ) {
             Panel {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Pill(if (paused) "En pause" else "En cours", if (paused) p.warning else p.primary, filled = true)
+                    Pill(if (paused) tr("En pause") else tr("En cours"), if (paused) p.warning else p.primary, filled = true)
                     Spacer(Modifier.weight(1f))
-                    Label("Temps de jeu", style = Type.caption)
+                    Label(tr("Temps de jeu"), style = Type.caption)
                     Spacer(Modifier.width(8.dp))
                     Text(formatDuration(Tracker.elapsedMs(now)), style = Type.metricXl, color = if (paused) p.warning else p.primary)
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     MetricCard(
-                        "FC live", if (hrNow > 0) "$hrNow" else "—", "bpm", Modifier.weight(1f),
+                        tr("FC live"), if (hrNow > 0) "$hrNow" else "—", "bpm", Modifier.weight(1f),
                         icon = Icons.Filled.Favorite, color = if (hrNow > 0) p.secondary else p.muted,
-                        footer = if (hrNow > 0) hrSource else "Montre ou capteur non reçu",
+                        footer = if (hrNow > 0) hrSource else tr("Montre ou capteur non reçu"),
                     )
                     val band = when {
-                        live.speedKmh >= s.sprintKmh -> "SPRINT"
-                        live.speedKmh >= s.hiKmh -> "HAUTE INT."
-                        live.speedKmh >= s.hiKmh * 0.72 -> "COURSE"
-                        live.speedKmh >= 7 -> "FOOTING"
-                        else -> "MARCHE"
+                        live.speedKmh >= s.sprintKmh -> tr("SPRINT")
+                        live.speedKmh >= s.hiKmh -> tr("HAUTE INT.")
+                        live.speedKmh >= s.hiKmh * 0.72 -> tr("COURSE")
+                        live.speedKmh >= 7 -> tr("FOOTING")
+                        else -> tr("MARCHE")
                     }
                     MetricCard(
-                        "Allure", String.format("%.1f", live.speedKmh), "km/h", Modifier.weight(1f),
+                        tr("Allure"), String.format("%.1f", live.speedKmh), "km/h", Modifier.weight(1f),
                         icon = Icons.Filled.Speed, color = if (live.speedKmh >= s.hiKmh) p.secondary else p.primary,
                         footer = band,
                         footerColor = if (live.speedKmh >= s.hiKmh) p.secondary else p.primary,
@@ -179,8 +181,8 @@ fun LiveScreen(onGoCalib: () -> Unit) {
                 Bar((live.speedKmh / s.sprintKmh).toFloat(), if (live.speedKmh >= s.hiKmh) p.secondary else p.primary)
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MetricCard("Distance", formatKm(live.distanceM), unitKm(live.distanceM), Modifier.weight(1f), icon = Icons.Filled.Straighten, color = p.tertiary)
-                    MetricCard("Calories", "${live.kcal.toInt()}", "kcal", Modifier.weight(1f), icon = Icons.Filled.LocalFireDepartment, color = p.text)
+                    MetricCard(tr("Distance"), formatKm(live.distanceM), unitKm(live.distanceM), Modifier.weight(1f), icon = Icons.Filled.Straighten, color = p.tertiary)
+                    MetricCard(tr("Calories"), "${live.kcal.toInt()}", "kcal", Modifier.weight(1f), icon = Icons.Filled.LocalFireDepartment, color = p.text)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -196,7 +198,7 @@ fun LiveScreen(onGoCalib: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Label(
-                    if (!live.hasFix) "Signal GPS faible" else if (live.inField) "Dans les limites du terrain" else "Hors terrain",
+                    if (!live.hasFix) tr("Signal GPS faible") else if (live.inField) tr("Dans les limites du terrain") else tr("Hors terrain"),
                     color = if (!live.hasFix) p.warning else if (live.inField) p.primary else p.secondary,
                     modifier = Modifier.weight(1f)
                 )
@@ -232,7 +234,7 @@ fun LiveScreen(onGoCalib: () -> Unit) {
                         .background(p.elevated.copy(alpha = 0.92f))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    Text(String.format("Vitesse max : %.1f km/h · Sprints : %d", live.maxSpeedKmh, live.sprints), style = Type.caption, color = p.text)
+                    Text(trf("Vitesse max : %.1f km/h · Sprints : %d", live.maxSpeedKmh, live.sprints), style = Type.caption, color = p.text)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -245,8 +247,8 @@ fun LiveScreen(onGoCalib: () -> Unit) {
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Label("Dernier temps fort", style = Type.caption)
-                            Text(h.label, style = Type.bodyBold, color = p.text)
+                            Label(tr("Dernier temps fort"), style = Type.caption)
+                            Text(tr(h.label), style = Type.bodyBold, color = p.text)
                         }
                         Text(SimpleDateFormat("HH:mm:ss", Locale.FRANCE).format(Date(h.t)), style = Type.label, color = p.muted)
                     }
@@ -255,18 +257,18 @@ fun LiveScreen(onGoCalib: () -> Unit) {
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ControlButton("Temps fort", Icons.Filled.Bolt, p.surface, p.text, Modifier.weight(1f)) { Tracker.mark() }
+                ControlButton(tr("Temps fort"), Icons.Filled.Bolt, p.surface, p.text, Modifier.weight(1f)) { Tracker.mark() }
                 ControlButton(
-                    if (paused) "Reprendre" else "Pause",
+                    if (paused) tr("Reprendre") else tr("Pause"),
                     if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
                     if (paused) p.primary else p.secondary,
                     if (paused) p.onPrimary else Color.White,
                     Modifier.weight(1.2f)
                 ) { if (paused) Tracker.resume() else Tracker.pause() }
-                ControlButton("Verrouiller", Icons.Filled.Lock, p.surface, p.text, Modifier.weight(1f)) { locked = true }
+                ControlButton(tr("Verrouiller"), Icons.Filled.Lock, p.surface, p.text, Modifier.weight(1f)) { locked = true }
             }
             Spacer(Modifier.height(12.dp))
-            BigButton("Terminer la séance", icon = Icons.Filled.Stop, color = p.elevated, textColor = p.secondary, height = 56.dp) {
+            BigButton(tr("Terminer la séance"), icon = Icons.Filled.Stop, color = p.elevated, textColor = p.secondary, height = 56.dp) {
                 confirmStop = true
             }
             Spacer(Modifier.height(24.dp))
@@ -283,8 +285,8 @@ fun LiveScreen(onGoCalib: () -> Unit) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Filled.Lock, null, tint = Color.White, modifier = Modifier.size(48.dp))
                     Spacer(Modifier.height(12.dp))
-                    Text("Écran verrouillé", style = Type.h2, color = Color.White)
-                    Text("Appui long pour déverrouiller", style = Type.label, color = Color.White.copy(alpha = 0.8f))
+                    Text(tr("Écran verrouillé"), style = Type.h2, color = Color.White)
+                    Text(tr("Appui long pour déverrouiller"), style = Type.label, color = Color.White.copy(alpha = 0.8f))
                 }
             }
         }
@@ -294,16 +296,16 @@ fun LiveScreen(onGoCalib: () -> Unit) {
         AlertDialog(
             onDismissRequest = { confirmStop = false },
             containerColor = p.elevated,
-            title = { Text("Terminer la séance ?", style = Type.h2, color = p.text) },
-            text = { Text("Les statistiques seront calculées et enregistrées.", style = Type.body, color = p.muted) },
+            title = { Text(tr("Terminer la séance ?"), style = Type.h2, color = p.text) },
+            text = { Text(tr("Les statistiques seront calculées et enregistrées."), style = Type.body, color = p.muted) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmStop = false
                     TrackingService.stop(ctx)
-                }) { Text("TERMINER", style = Type.label, color = p.secondary) }
+                }) { Text(tr("TERMINER"), style = Type.label, color = p.secondary) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmStop = false }) { Text("CONTINUER", style = Type.label, color = p.text) }
+                TextButton(onClick = { confirmStop = false }) { Text(tr("CONTINUER"), style = Type.label, color = p.text) }
             },
         )
     }

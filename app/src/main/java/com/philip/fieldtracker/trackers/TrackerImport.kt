@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.trackers
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -44,11 +46,11 @@ object TrackerImport {
             val lower = name.lowercase()
             when {
                 lower.endsWith(".gpx") || lower.endsWith(".tcx") || lower.endsWith(".xml") -> parseXml(input)
-                lower.endsWith(".fit") -> throw ImportException("Format .fit non pris en charge : exporte en CSV, GPX ou TCX.")
+                lower.endsWith(".fit") -> throw ImportException(tr("Format .fit non pris en charge : exporte en CSV, GPX ou TCX."))
                 else -> parseCsv(input.bufferedReader().readText())
             }
-        } ?: throw ImportException("Impossible d'ouvrir le fichier.")
-        if (pts.size < 10) throw ImportException("Aucune position GPS exploitable trouvée dans « $name ».")
+        } ?: throw ImportException(tr("Impossible d'ouvrir le fichier."))
+        if (pts.size < 10) throw ImportException(trf("Aucune position GPS exploitable trouvée dans « %s ».", name))
         return name to pts.sortedBy { it.t }
     }
 
@@ -66,7 +68,7 @@ object TrackerImport {
                 headerIdx = i; cols = c; break
             }
         }
-        if (headerIdx < 0) throw ImportException("Colonnes latitude / longitude introuvables dans le CSV.")
+        if (headerIdx < 0) throw ImportException(tr("Colonnes latitude / longitude introuvables dans le CSV."))
         fun find(vararg keys: String) = cols.indexOfFirst { h -> keys.any { k -> h.contains(k) } }
         val iLat = find("lat")
         val iLon = cols.indexOfFirst { it.contains("lon") || it.contains("lng") }
@@ -203,7 +205,7 @@ object TrackerImport {
     fun toSession(sport: Sport, name: String, raw: List<RawPoint>, cal: Calibration?): Session {
         val calibration = cal ?: run {
             val corners = Geo.minAreaRect(raw.map { LatLon(it.lat, it.lon) })
-                ?: throw ImportException("Impossible d'estimer le terrain.")
+                ?: throw ImportException(tr("Impossible d'estimer le terrain."))
             Calibration(corners, estimated = true)
         }
         val pts = ArrayList<TrackPoint>(raw.size)

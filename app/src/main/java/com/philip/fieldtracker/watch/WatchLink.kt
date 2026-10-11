@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.watch
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
@@ -104,7 +106,8 @@ object WatchLink {
         val fix = GpsEngine.fix.value
         return JSONObject().apply {
             put("phase", phase)
-            put("sport", sport?.name ?: "")
+            put("sport", sport?.name?.let { tr(it) } ?: "")
+            put("lang", com.philip.fieldtracker.i18n.I18n.lang)
             put("corner", Calibrator.currentIndex)
             put("capturing", Calibrator.progress.value != null)
             put("acc", if (GpsEngine.isFresh(fix)) (fix?.accuracy ?: 0f).toDouble() else -1.0)
@@ -128,7 +131,7 @@ object WatchLink {
                 Calibrator.prepare(sport)
                 Calibrator.capture(sport)
             }
-            PATH_HR -> data.trim().toIntOrNull()?.let { HeartRateHub.push(it, "Montre") }
+            PATH_HR -> data.trim().toIntOrNull()?.let { HeartRateHub.push(it, tr("Montre")) }
             PATH_CMD -> when (data) {
                 "start" -> {
                     val sport = AppState.sport.value
@@ -140,7 +143,7 @@ object WatchLink {
                 }
                 "pause" -> Tracker.pause()
                 "resume" -> Tracker.resume()
-                "mark" -> Tracker.mark("Temps fort (montre)")
+                "mark" -> Tracker.mark(tr("Temps fort (montre)"))
                 "stop" -> try { TrackingService.stop(ctx) } catch (_: Exception) { Tracker.stop(ctx) }
             }
             PATH_HELLO -> refresh()

@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.trackers
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -51,7 +53,7 @@ object BleHeartRate {
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val d = result.device
-            val name = d.name ?: result.scanRecord?.deviceName ?: "Capteur cardio"
+            val name = d.name ?: result.scanRecord?.deviceName ?: tr("Capteur cardio")
             val list = _found.value.filter { it.address != d.address } + Found(d.address, name, result.rssi)
             _found.value = list.sortedByDescending { it.rssi }
         }
@@ -159,6 +161,6 @@ object BleHeartRate {
         } else {
             v[1].toInt() and 0xFF
         }
-        handler.post { HeartRateHub.push(bpm, _deviceName.value.ifEmpty { "Capteur BLE" }) }
+        handler.post { HeartRateHub.push(bpm, _deviceName.value.ifEmpty { tr("Capteur BLE") }) }
     }
 }

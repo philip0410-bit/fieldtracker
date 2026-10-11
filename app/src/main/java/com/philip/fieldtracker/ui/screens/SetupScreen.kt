@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.ui.screens
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import android.Manifest
 import android.os.Build
 import android.widget.Toast
@@ -105,12 +107,14 @@ fun SetupScreen(onNext: () -> Unit, onOpenStats: () -> Unit) {
         Spacer(Modifier.height(20.dp))
         HardwareSection(onOpenStats)
         Spacer(Modifier.height(20.dp))
+        LanguageSection()
+        Spacer(Modifier.height(20.dp))
         DisplaySection()
         Spacer(Modifier.height(20.dp))
         ProfileSection()
         Spacer(Modifier.height(20.dp))
         BigButton(
-            text = if (selected != null) "Passer au balisage" else "Choisis un sport",
+            text = if (selected != null) tr("Passer au balisage") else tr("Choisis un sport"),
             icon = Icons.AutoMirrored.Filled.ArrowForward,
             enabled = selected != null,
             onClick = {
@@ -120,7 +124,7 @@ fun SetupScreen(onNext: () -> Unit, onOpenStats: () -> Unit) {
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "Le terrain se balise en te plaçant sur ses 4 coins.",
+            tr("Le terrain se balise en te plaçant sur ses 4 coins."),
             style = Type.caption, color = p.muted, modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
         )
     }
@@ -151,13 +155,13 @@ private fun HardwareSection(onOpenStats: () -> Unit) {
     }
     val blePerms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
         if (res.values.all { it }) BleHeartRate.startScan(ctx)
-        else Toast.makeText(ctx, "Autorisation Bluetooth refusée", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(ctx, tr("Autorisation Bluetooth refusée"), Toast.LENGTH_SHORT).show()
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val sport = AppState.sport.value
         if (sport == null) {
-            Toast.makeText(ctx, "Choisis d'abord le sport de la séance importée", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, tr("Choisis d'abord le sport de la séance importée"), Toast.LENGTH_LONG).show()
             return@rememberLauncherForActivityResult
         }
         importing = true
@@ -178,14 +182,14 @@ private fun HardwareSection(onOpenStats: () -> Unit) {
                     null
                 }
             } catch (e: Exception) {
-                e.message ?: "Import impossible"
+                e.message ?: tr("Import impossible")
             }
             importing = false
             if (msg == null) onOpenStats() else Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
         }
     }
 
-    SectionTitle("Matériel connecté", "${(if (nodes.isNotEmpty()) 1 else 0) + (if (bleStatus == BleHeartRate.Status.CONNECTED) 1 else 0)} actif(s)")
+    SectionTitle(tr("Matériel connecté"), "${(if (nodes.isNotEmpty()) 1 else 0) + (if (bleStatus == BleHeartRate.Status.CONNECTED) 1 else 0)} actif(s)")
 
     // Montre
     Panel(accent = if (nodes.isNotEmpty()) p.primary.copy(alpha = 0.6f) else null) {
@@ -193,15 +197,15 @@ private fun HardwareSection(onOpenStats: () -> Unit) {
             IconSquare(Icons.Filled.Watch, if (nodes.isNotEmpty()) p.primary else p.muted)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(nodes.firstOrNull()?.name ?: "Montre Wear OS", style = Type.bodyBold, color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Label(if (nodes.isNotEmpty()) "Connectée · balisage + FC au poignet" else "Aucune montre connectée", style = Type.caption)
+                Text(nodes.firstOrNull()?.name ?: tr("Montre Wear OS"), style = Type.bodyBold, color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Label(if (nodes.isNotEmpty()) tr("Connectée · balisage + FC au poignet") else tr("Aucune montre connectée"), style = Type.caption)
             }
             IconSquare(Icons.Filled.Refresh, p.muted) { WatchLink.refresh() }
         }
         if (nodes.isEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text(
-                "Installe « FieldTracker montre » sur ta Galaxy Watch (Wear OS) puis appuie sur actualiser.",
+                tr("Installe « FieldTracker montre » sur ta Galaxy Watch (Wear OS) puis appuie sur actualiser."),
                 style = Type.body, color = p.muted
             )
         }
@@ -214,21 +218,21 @@ private fun HardwareSection(onOpenStats: () -> Unit) {
             IconSquare(Icons.Filled.Bluetooth, if (bleStatus == BleHeartRate.Status.CONNECTED) p.primary else p.muted)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(if (bleName.isNotEmpty()) bleName else "Capteur cardio Bluetooth", style = Type.bodyBold, color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (bleName.isNotEmpty()) bleName else tr("Capteur cardio Bluetooth"), style = Type.bodyBold, color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Label(
                     when (bleStatus) {
-                        BleHeartRate.Status.IDLE -> "Ceinture, brassard ou traqueur (profil FC)"
-                        BleHeartRate.Status.SCANNING -> "Recherche…"
-                        BleHeartRate.Status.CONNECTING -> "Connexion…"
-                        BleHeartRate.Status.CONNECTED -> "Connecté"
-                        BleHeartRate.Status.ERROR -> "Bluetooth indisponible / désactivé"
+                        BleHeartRate.Status.IDLE -> tr("Ceinture, brassard ou traqueur (profil FC)")
+                        BleHeartRate.Status.SCANNING -> tr("Recherche…")
+                        BleHeartRate.Status.CONNECTING -> tr("Connexion…")
+                        BleHeartRate.Status.CONNECTED -> tr("Connecté")
+                        BleHeartRate.Status.ERROR -> tr("Bluetooth indisponible / désactivé")
                     }, style = Type.caption
                 )
             }
             if (bleStatus == BleHeartRate.Status.CONNECTED || bleStatus == BleHeartRate.Status.CONNECTING) {
-                GhostButton("Déconnecter", onClick = { BleHeartRate.disconnect() })
+                GhostButton(tr("Déconnecter"), onClick = { BleHeartRate.disconnect() })
             } else {
-                GhostButton("Rechercher", onClick = {
+                GhostButton(tr("Rechercher"), onClick = {
                     val perms = if (Build.VERSION.SDK_INT >= 31)
                         arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
                     else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -263,16 +267,16 @@ private fun HardwareSection(onOpenStats: () -> Unit) {
             IconSquare(Icons.Filled.FavoriteBorder, if (hcGranted == true) p.primary else p.muted)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Samsung Health", style = Type.bodyBold, color = p.text)
+                Text(tr("Samsung Health"), style = Type.bodyBold, color = p.text)
                 Label(
                     when {
-                        !hcAvailable -> "Health Connect non installé"
-                        hcGranted == true -> "Autorisé via Health Connect"
-                        else -> "Via Health Connect — non autorisé"
+                        !hcAvailable -> tr("Health Connect non installé")
+                        hcGranted == true -> tr("Autorisé via Health Connect")
+                        else -> tr("Via Health Connect — non autorisé")
                     }, style = Type.caption
                 )
             }
-            if (hcAvailable && hcGranted != true) GhostButton("Autoriser", onClick = { hcLauncher.launch(HealthLink.permissions) })
+            if (hcAvailable && hcGranted != true) GhostButton(tr("Autoriser"), onClick = { hcLauncher.launch(HealthLink.permissions) })
         }
     }
     Spacer(Modifier.height(10.dp))
@@ -283,10 +287,10 @@ private fun HardwareSection(onOpenStats: () -> Unit) {
             IconSquare(Icons.Filled.FileUpload, p.tertiary)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Traqueur GPS (APEX, MyCoach…)", style = Type.bodyBold, color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Label("Import de l'export CSV, GPX ou TCX", style = Type.caption)
+                Text(tr("Traqueur GPS (APEX, MyCoach…)"), style = Type.bodyBold, color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Label(tr("Import de l'export CSV, GPX ou TCX"), style = Type.caption)
             }
-            GhostButton(if (importing) "Import…" else "Importer", onClick = { if (!importing) picker.launch(arrayOf("*/*")) })
+            GhostButton(if (importing) tr("Import…") else tr("Importer"), onClick = { if (!importing) picker.launch(arrayOf("*/*")) })
         }
     }
 }
@@ -300,7 +304,7 @@ private fun SportSection(selected: Sport?) {
     var category by remember { mutableStateOf<String?>(null) }
     val list = Sports.all.filter { s ->
         (category == null || s.category == category) &&
-            (query.isBlank() || s.name.contains(query.trim(), ignoreCase = true))
+            (query.isBlank() || s.name.contains(query.trim(), ignoreCase = true) || tr(s.name).contains(query.trim(), ignoreCase = true))
     }
 
     var expanded by rememberSaveable { mutableStateOf(selected == null) }
@@ -314,8 +318,8 @@ private fun SportSection(selected: Sport?) {
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Choix du sport", style = Type.h2, color = p.text, modifier = Modifier.weight(1f))
-        Label(if (expanded) "Fermer" else "Ouvrir", color = p.primary)
+        Text(tr("Choix du sport"), style = Type.h2, color = p.text, modifier = Modifier.weight(1f))
+        Label(if (expanded) tr("Fermer") else tr("Ouvrir"), color = p.primary)
         Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = p.primary)
     }
     if (!expanded) {
@@ -333,13 +337,13 @@ private fun SportSection(selected: Sport?) {
                 Box(Modifier.width(96.dp)) { FieldCanvas(selected, inset = 4.dp, lineColor = p.primary, strokeDp = 1f) }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(selected.name, style = Type.bodyBold, color = p.text)
+                    Text(tr(selected.name), style = Type.bodyBold, color = p.text)
                     Label(selected.dims, color = p.primary, style = Type.caption)
-                    Label("Touche pour changer de sport", style = Type.caption)
+                    Label(tr("Touche pour changer de sport"), style = Type.caption)
                 }
             }
         } else {
-            Text("Aucun sport choisi — touche « Ouvrir ».", style = Type.body, color = p.muted)
+            Text(tr("Aucun sport choisi — touche « Ouvrir »."), style = Type.body, color = p.muted)
         }
         return
     }
@@ -348,7 +352,7 @@ private fun SportSection(selected: Sport?) {
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            placeholder = { Text("Rechercher un sport", style = Type.body, color = p.muted) },
+            placeholder = { Text(tr("Rechercher un sport"), style = Type.body, color = p.muted) },
             leadingIcon = { Icon(Icons.Filled.Search, null, tint = p.muted) },
             textStyle = Type.body.copy(color = p.text),
             shape = Shape8,
@@ -356,8 +360,8 @@ private fun SportSection(selected: Sport?) {
         )
         Spacer(Modifier.height(10.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip("Tous", category == null) { category = null }
-            Sports.categories.forEach { c -> Chip(c, category == c) { category = c } }
+            Chip(tr("Tous"), category == null) { category = null }
+            Sports.categories.forEach { c -> Chip(tr(c), category == c) { category = c } }
         }
         Spacer(Modifier.height(12.dp))
         list.chunked(2).forEach { row ->
@@ -374,7 +378,7 @@ private fun SportSection(selected: Sport?) {
             }
             Spacer(Modifier.height(10.dp))
         }
-        if (list.isEmpty()) Text("Aucun sport trouvé.", style = Type.body, color = p.muted)
+        if (list.isEmpty()) Text(tr("Aucun sport trouvé."), style = Type.body, color = p.muted)
 }
 
 @Composable
@@ -406,16 +410,27 @@ private fun SportCard(s: Sport, selected: Boolean, modifier: Modifier, onClick: 
             }
         }
         Spacer(Modifier.height(8.dp))
-        Text(s.name, style = Type.bodyBold, color = p.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(tr(s.name), style = Type.bodyBold, color = p.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Label(s.dims, color = if (selected) p.primary else p.muted, style = Type.caption)
         if (s.indoor) {
             Spacer(Modifier.height(4.dp))
-            Label("En salle · GPS limité", color = p.warning, style = Type.caption)
+            Label(tr("En salle · GPS limité"), color = p.warning, style = Type.caption)
         }
     }
 }
 
 // ------------------------------------------------------------------ Affichage
+
+@Composable
+private fun LanguageSection() {
+    val p = LocalPalette.current
+    SectionTitle(tr("Langue"))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        com.philip.fieldtracker.i18n.I18n.languages.forEach { (code, label) ->
+            Chip(label, com.philip.fieldtracker.i18n.I18n.lang == code) { AppState.setLang(code) }
+        }
+    }
+}
 
 @Composable
 private fun DisplaySection() {
@@ -424,9 +439,9 @@ private fun DisplaySection() {
     val outAlert by AppState.outAlert.collectAsState()
     val keepOn by AppState.keepScreenOn.collectAsState()
 
-    SectionTitle("Affichage & contraste", "Thème")
+    SectionTitle(tr("Affichage & contraste"), tr("Thème"))
     Panel {
-        val options = listOf("system" to "Auto (système)") + Palettes.all.map { it.id to it.label }
+        val options = listOf("system" to tr("Auto (système)")) + Palettes.all.map { it.id to tr(it.label) }
         options.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { (id, label) ->
@@ -455,8 +470,8 @@ private fun DisplaySection() {
             }
             Spacer(Modifier.height(8.dp))
         }
-        ToggleRow("Alerte sortie de terrain", "Vibration téléphone + montre après 3 s hors limites", outAlert) { AppState.setOutAlert(it) }
-        ToggleRow("Écran toujours allumé", "Pendant la séance en direct", keepOn) { AppState.setKeepScreenOn(it) }
+        ToggleRow(tr("Alerte sortie de terrain"), tr("Vibration téléphone + montre après 3 s hors limites"), outAlert) { AppState.setOutAlert(it) }
+        ToggleRow(tr("Écran toujours allumé"), tr("Pendant la séance en direct"), keepOn) { AppState.setKeepScreenOn(it) }
     }
 }
 
@@ -484,16 +499,16 @@ fun ToggleRow(title: String, subtitle: String, value: Boolean, onChange: (Boolea
 private fun ProfileSection() {
     val p = LocalPalette.current
     val profile by AppState.profile.collectAsState()
-    SectionTitle("Profil", "Calories & zones FC")
+    SectionTitle(tr("Profil"), tr("Calories & zones FC"))
     Panel {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NumberField("Âge", profile.age.toString(), Modifier.weight(1f)) { v ->
+            NumberField(tr("Âge"), profile.age.toString(), Modifier.weight(1f)) { v ->
                 v.toIntOrNull()?.takeIf { it in 8..99 }?.let { AppState.setProfile(profile.copy(age = it)) }
             }
-            NumberField("Poids (kg)", profile.weightKg.toInt().toString(), Modifier.weight(1f)) { v ->
+            NumberField(tr("Poids (kg)"), profile.weightKg.toInt().toString(), Modifier.weight(1f)) { v ->
                 v.toIntOrNull()?.takeIf { it in 25..200 }?.let { AppState.setProfile(profile.copy(weightKg = it.toDouble())) }
             }
-            NumberField("FC max", if (profile.hrMaxOverride > 0) profile.hrMaxOverride.toString() else "", Modifier.weight(1f), placeholder = "${220 - profile.age}") { v ->
+            NumberField(tr("FC max"), if (profile.hrMaxOverride > 0) profile.hrMaxOverride.toString() else "", Modifier.weight(1f), placeholder = "${220 - profile.age}") { v ->
                 val n = v.toIntOrNull()
                 if (n == null) AppState.setProfile(profile.copy(hrMaxOverride = 0))
                 else if (n in 120..230) AppState.setProfile(profile.copy(hrMaxOverride = n))
@@ -501,8 +516,8 @@ private fun ProfileSection() {
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip("Homme", profile.male) { AppState.setProfile(profile.copy(male = true)) }
-            Chip("Femme", !profile.male) { AppState.setProfile(profile.copy(male = false)) }
+            Chip(tr("Homme"), profile.male) { AppState.setProfile(profile.copy(male = true)) }
+            Chip(tr("Femme"), !profile.male) { AppState.setProfile(profile.copy(male = false)) }
         }
     }
 }

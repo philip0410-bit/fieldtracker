@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.ui.components
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
@@ -98,23 +100,23 @@ fun GpsPanel(tag: String = "panel") {
             Column(Modifier.weight(1f)) {
                 Text(
                     when (status) {
-                        GpsStatus.NO_PERMISSION -> "Localisation non autorisée"
-                        GpsStatus.LOCATION_OFF -> "Localisation désactivée"
-                        GpsStatus.SEARCHING -> "Recherche des satellites…"
-                        GpsStatus.APPROXIMATE -> "Position approximative ±$acc m"
-                        GpsStatus.OK -> "GPS actif ±$acc m"
+                        GpsStatus.NO_PERMISSION -> tr("Localisation non autorisée")
+                        GpsStatus.LOCATION_OFF -> tr("Localisation désactivée")
+                        GpsStatus.SEARCHING -> tr("Recherche des satellites…")
+                        GpsStatus.APPROXIMATE -> trf("Position approximative ±%d m", acc)
+                        GpsStatus.OK -> trf("GPS actif ±%d m", acc)
                     },
                     style = Type.bodyBold, color = p.text
                 )
                 Text(
                     when (status) {
-                        GpsStatus.NO_PERMISSION -> "Nécessaire pour baliser le terrain et suivre tes déplacements."
-                        GpsStatus.LOCATION_OFF -> "Active la localisation du téléphone."
-                        GpsStatus.SEARCHING -> "Va à découvert. Le GPS fonctionne sans internet ; le premier signal peut prendre 30 s à 1 min."
+                        GpsStatus.NO_PERMISSION -> tr("Nécessaire pour baliser le terrain et suivre tes déplacements.")
+                        GpsStatus.LOCATION_OFF -> tr("Active la localisation du téléphone.")
+                        GpsStatus.SEARCHING -> tr("Va à découvert. Le GPS fonctionne sans internet ; le premier signal peut prendre 30 s à 1 min.")
                         GpsStatus.APPROXIMATE ->
-                            if (!GpsEngine.hasPrecise(ctx)) "Seule la position approximative est autorisée."
-                            else "Localisation par Wi-Fi/antennes en attendant les satellites."
-                        GpsStatus.OK -> "Satellites : ${sats.first} utilisés / ${sats.second} visibles"
+                            if (!GpsEngine.hasPrecise(ctx)) tr("Seule la position approximative est autorisée.")
+                            else tr("Localisation par Wi-Fi/antennes en attendant les satellites.")
+                        GpsStatus.OK -> trf("Satellites : %d utilisés / %d visibles", sats.first, sats.second)
                     },
                     style = Type.caption, color = p.muted
                 )
@@ -124,17 +126,17 @@ fun GpsPanel(tag: String = "panel") {
         when (status) {
             GpsStatus.NO_PERMISSION -> {
                 Spacer(Modifier.height(10.dp))
-                GhostButton("Autoriser la localisation", Modifier.fillMaxWidth(), Icons.Filled.GpsFixed, tint = p.primary) { askPerms() }
+                GhostButton(tr("Autoriser la localisation"), Modifier.fillMaxWidth(), Icons.Filled.GpsFixed, tint = p.primary) { askPerms() }
             }
             GpsStatus.LOCATION_OFF -> {
                 Spacer(Modifier.height(10.dp))
-                GhostButton("Activer la localisation", Modifier.fillMaxWidth(), Icons.Filled.GpsFixed, tint = p.primary) {
+                GhostButton(tr("Activer la localisation"), Modifier.fillMaxWidth(), Icons.Filled.GpsFixed, tint = p.primary) {
                     ctx.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }
             }
             GpsStatus.APPROXIMATE -> if (!GpsEngine.hasPrecise(ctx)) {
                 Spacer(Modifier.height(10.dp))
-                GhostButton("Autoriser la position exacte", Modifier.fillMaxWidth(), Icons.Filled.GpsFixed, tint = p.primary) { askPerms() }
+                GhostButton(tr("Autoriser la position exacte"), Modifier.fillMaxWidth(), Icons.Filled.GpsFixed, tint = p.primary) { askPerms() }
             }
             else -> {}
         }

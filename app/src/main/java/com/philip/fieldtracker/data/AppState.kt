@@ -50,6 +50,15 @@ object AppState {
             hrMaxOverride = prefs.getInt("hrMax", 0),
         )
         _selectedSessionId.value = prefs.getString("lastSession", null)
+        val device = java.util.Locale.getDefault().language
+        val defLang = if (device == "ko" || device == "en") device else "fr"
+        com.philip.fieldtracker.i18n.I18n.setLang(prefs.getString("lang", defLang) ?: defLang)
+    }
+
+    fun setLang(l: String) {
+        com.philip.fieldtracker.i18n.I18n.setLang(l)
+        prefs.edit().putString("lang", l).apply()
+        com.philip.fieldtracker.watch.WatchLink.pushState(force = true)
     }
 
     fun selectSport(s: Sport) {

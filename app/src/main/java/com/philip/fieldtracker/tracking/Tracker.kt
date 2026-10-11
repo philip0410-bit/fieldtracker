@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.tracking
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import android.content.Context
 import android.location.Location
 import com.philip.fieldtracker.data.AppState
@@ -101,7 +103,7 @@ object Tracker {
     }
 
     @Synchronized
-    fun mark(label: String = "Temps fort") {
+    fun mark(label: String = tr("Temps fort")) {
         if (!isActive) return
         val h = Highlight(System.currentTimeMillis(), label)
         highlights.add(h)
@@ -163,7 +165,7 @@ object Tracker {
             val zi = (uv[0].coerceIn(0.0, 0.999) * 3).toInt()
             val zj = (uv[1].coerceIn(0.0, 0.999) * 3).toInt()
             "${sport.zoneLabelsLength()[zi]} · ${sport.zoneLabelsWidth()[zj]}"
-        } else "Hors terrain"
+        } else tr("Hors terrain")
 
         // Alerte sortie de terrain (après 3 s dehors)
         if (!inside) {

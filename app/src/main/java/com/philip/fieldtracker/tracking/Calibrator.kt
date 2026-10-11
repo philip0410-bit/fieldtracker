@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.tracking
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import com.philip.fieldtracker.data.AppState
 import com.philip.fieldtracker.data.Calibration
 import com.philip.fieldtracker.data.LatLon
@@ -75,7 +77,7 @@ object Calibrator {
         _progress.value = null
         _corners.value = c.corners
         _calibration.value = c
-        _message.value = "Balisage précédent réutilisé"
+        _message.value = tr("Balisage précédent réutilisé")
         WatchLink.pushState()
     }
 
@@ -104,14 +106,14 @@ object Calibrator {
             // Localisation réseau : peu de mises à jour, on garde la dernière position récente
             if (samples.isEmpty()) GpsEngine.fix.value?.takeIf { GpsEngine.isFresh(it, 15000) && it.accuracy <= 150f }?.let { samples.add(it) }
             if (samples.isEmpty()) {
-                _message.value = "Aucune position reçue — active la localisation et mets-toi à découvert, puis réessaie."
+                _message.value = tr("Aucune position reçue — active la localisation et mets-toi à découvert, puis réessaie.")
                 Haptics.vibrate(ctx, Haptics.ALERT)
                 WatchLink.send(WatchLink.PATH_ALERT, "gps")
                 WatchLink.pushState()
                 return@launch
             }
             val best = samples.minOf { it.accuracy }
-            if (best > MAX_ACCURACY_M) _message.value = "Coin enregistré avec une précision de ±${best.toInt()} m : le terrain sera approximatif."
+            if (best > MAX_ACCURACY_M) _message.value = trf("Coin enregistré avec une précision de ±%d m : le terrain sera approximatif.", best.toInt())
             var wSum = 0.0; var lat = 0.0; var lon = 0.0
             for (s in samples) {
                 val w = 1.0 / (s.accuracy * s.accuracy).coerceAtLeast(1f)

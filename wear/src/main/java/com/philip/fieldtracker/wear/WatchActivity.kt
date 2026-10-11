@@ -171,9 +171,9 @@ private fun WatchApp(st: PhoneState, summary: Summary?, connected: Boolean, hr: 
         contentAlignment = Alignment.Center,
     ) {
         when {
-            summary != null && st.phase != "live" && st.phase != "paused" -> SummaryView(summary)
-            !connected && st.receivedAt == 0L -> Message("FieldTracker", "Ouvre l'app sur le téléphone")
-            st.phase == "none" -> Message("FieldTracker", "Choisis ton sport sur le téléphone")
+            summary != null && st.phase != "live" && st.phase != "paused" -> SummaryView(summary, st.lang)
+            !connected && st.receivedAt == 0L -> Message("FieldTracker", WatchText.t("Ouvre l'app sur le téléphone", st.lang))
+            st.phase == "none" -> Message("FieldTracker", WatchText.t("Choisis ton sport sur le téléphone", st.lang))
             st.phase == "calib" -> CalibView(st, send)
             st.phase == "ready" -> ReadyView(st, send)
             else -> LiveView(st, hr, send)
@@ -224,18 +224,18 @@ private fun CalibView(st: PhoneState, send: (String, String) -> Unit) {
             }
         }
         Spacer(Modifier.height(2.dp))
-        T("COIN ${(st.corner + 1).coerceAtMost(4)}/4", 14.sp, TextHi, mono = true)
+        T(String.format(WatchText.t("COIN %d/4", st.lang), (st.corner + 1).coerceAtMost(4)), 14.sp, TextHi, mono = true)
         val accText = if (st.accuracy < 0) "GPS…" else "±${st.accuracy.toInt()} m"
         T(accText, 11.sp, if (st.accuracy in 0.0..20.0) Lime else Amber, mono = true)
         Spacer(Modifier.height(6.dp))
         if (st.capturing) {
-            T("Mesure… reste immobile", 12.sp, Lime)
+            T(WatchText.t("Mesure… reste immobile", st.lang), 12.sp, Lime)
         } else {
             RoundButton("OK", Lime, Bg) { send("/ft/corner", "") }
         }
         if (st.message.isNotEmpty() && !st.capturing) {
             Spacer(Modifier.height(4.dp))
-            T("GPS faible, réessaie", 10.sp, Amber)
+            T(WatchText.t("GPS faible, réessaie", st.lang), 10.sp, Amber)
         }
     }
 }
@@ -244,9 +244,9 @@ private fun CalibView(st: PhoneState, send: (String, String) -> Unit) {
 private fun ReadyView(st: PhoneState, send: (String, String) -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         T(st.sport, 12.sp, Muted)
-        T("Terrain balisé", 15.sp, Lime)
+        T(WatchText.t("Terrain balisé", st.lang), 15.sp, Lime)
         Spacer(Modifier.height(10.dp))
-        RoundButton("START", Lime, Bg, size = 80) { send("/ft/cmd", "start") }
+        RoundButton(WatchText.t("START", st.lang), Lime, Bg, size = 80) { send("/ft/cmd", "start") }
     }
 }
 
@@ -264,7 +264,7 @@ private fun LiveView(st: PhoneState, hr: Int, send: (String, String) -> Unit) {
                 .clip(RoundedCornerShape(50))
                 .background(if (st.inField) Lime.copy(alpha = 0.15f) else Orange.copy(alpha = 0.3f))
                 .padding(horizontal = 8.dp, vertical = 2.dp)
-        ) { T(if (st.inField) "DANS LE TERRAIN" else "HORS TERRAIN", 9.sp, if (st.inField) Lime else Orange, mono = true) }
+        ) { T(if (st.inField) WatchText.t("DANS LE TERRAIN", st.lang) else WatchText.t("HORS TERRAIN", st.lang), 9.sp, if (st.inField) Lime else Orange, mono = true) }
         Spacer(Modifier.height(2.dp))
         T(fmt(elapsed), 30.sp, if (paused) Amber else Lime, mono = true)
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -302,21 +302,21 @@ private fun LiveView(st: PhoneState, hr: Int, send: (String, String) -> Unit) {
                 contentAlignment = Alignment.Center,
             ) { T("■", 14.sp, TextHi) }
         }
-        T("maintenir ■ pour terminer", 8.sp, Muted, modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
+        T(WatchText.t("maintenir ■ pour terminer", st.lang), 8.sp, Muted, modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
     }
 }
 
 @Composable
-private fun SummaryView(s: Summary) {
+private fun SummaryView(s: Summary, lang: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        T("Séance terminée", 13.sp, Lime)
+        T(WatchText.t("Séance terminée", lang), 13.sp, Lime)
         Spacer(Modifier.height(4.dp))
         T(fmt(s.activeMs), 22.sp, TextHi, mono = true)
         T(if (s.distM < 1000) String.format("%.0f m", s.distM) else String.format("%.2f km", s.distM / 1000), 16.sp, TextHi, mono = true)
         T(String.format("Vmax %.1f km/h", s.vmax), 12.sp, Muted, mono = true)
-        T("${s.sprints} sprints", 12.sp, Orange, mono = true)
+        T(String.format(WatchText.t("%d sprints", lang), s.sprints), 12.sp, Orange, mono = true)
         Spacer(Modifier.height(4.dp))
-        T("Bilan complet sur le téléphone", 9.sp, Muted)
+        T(WatchText.t("Bilan complet sur le téléphone", lang), 9.sp, Muted)
     }
 }
 

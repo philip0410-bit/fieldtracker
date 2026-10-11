@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.health
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
@@ -76,7 +78,7 @@ object HealthLink {
                 startTime = start, startZoneOffset = off,
                 endTime = end, endZoneOffset = off,
                 exerciseType = exerciseType(s.sport.hc),
-                title = "${s.sport.name} – FieldTracker",
+                title = "${com.philip.fieldtracker.i18n.tr(s.sport.name)} – FieldTracker",
             )
         )
         if (stats.distanceM > 0) records.add(

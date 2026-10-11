@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.ui.screens
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -84,7 +86,7 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
 
     val s = sport
     if (s == null) {
-        EmptyState("Aucun sport choisi", "Choisis d'abord ton sport pour afficher le bon terrain.", "Choisir un sport", onGoSetup)
+        EmptyState(tr("Aucun sport choisi"), tr("Choisis d'abord ton sport pour afficher le bon terrain."), tr("Choisir un sport"), onGoSetup)
         return
     }
 
@@ -129,7 +131,7 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
                     Icon(Icons.Filled.Warning, null, tint = p.warning, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Sport en salle : le GPS fonctionne mal sous un toit. En intérieur, importe plutôt les données d'un traqueur équipé d'un système de positionnement intérieur.",
+                        tr("Sport en salle : le GPS fonctionne mal sous un toit. En intérieur, importe plutôt les données d'un traqueur équipé d'un système de positionnement intérieur."),
                         style = Type.body, color = p.text
                     )
                 }
@@ -140,13 +142,13 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
         // Étape
         Panel {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Pill(s.name, p.primary, filled = true, modifier = Modifier.weight(1f, fill = false))
+                Pill(tr(s.name), p.primary, filled = true, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.weight(1f))
-                Text(if (idx < 4) "Étape ${idx + 1}/4" else "Terminé", style = Type.label, color = p.muted)
+                Text(if (idx < 4) "Étape ${idx + 1}/4" else tr("Terminé"), style = Type.label, color = p.muted)
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                if (idx < 4) Calibrator.cornerNames[idx] else "Terrain balisé",
+                if (idx < 4) tr(Calibrator.cornerNames[idx]) else tr("Terrain balisé"),
                 style = Type.h1, color = p.text
             )
             if (fresh && fix != null) {
@@ -221,7 +223,7 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        "Coin ${idx + 1} : place-toi sur l'angle puis appuie sur OK",
+                        trf("Coin %d : place-toi sur l'angle puis appuie sur OK", idx + 1),
                         style = Type.caption, color = p.text
                     )
                 }
@@ -229,7 +231,7 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Commence par n'importe quel coin, puis fais le tour du terrain dans le sens des aiguilles d'une montre en longeant d'abord la grande ligne de côté.",
+            tr("Commence par n'importe quel coin, puis fais le tour du terrain dans le sens des aiguilles d'une montre en longeant d'abord la grande ligne de côté."),
             style = Type.caption, color = p.muted
         )
 
@@ -243,7 +245,7 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
             Panel(padding = 12.dp) {
                 sides.forEach { (i, d) ->
                     val ref = if (i % 2 == 0) s.lengthM else s.widthM
-                    KeyValue("Côté ${i + 1} → ${i + 2}", String.format("%.1f m  (réf. %.0f m)", d, ref))
+                    KeyValue(trf("Côté %d → %d", i + 1, i + 2), trf("%.1f m  (réf. %.0f m)", d, ref))
                 }
             }
         }
@@ -262,8 +264,8 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
                         IconSquare(Icons.Filled.Watch, p.primary)
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("Montre synchronisée", style = Type.bodyBold, color = p.text)
-                            Text("Tu peux aussi valider chaque coin depuis ta montre.", style = Type.caption, color = p.muted)
+                            Text(tr("Montre synchronisée"), style = Type.bodyBold, color = p.text)
+                            Text(tr("Tu peux aussi valider chaque coin depuis ta montre."), style = Type.caption, color = p.muted)
                         }
                     }
                 }
@@ -271,10 +273,10 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
             }
             BigButton(
                 text = when {
-                    progress != null -> "Mesure… ${((progress ?: 0f) * 100).toInt()} %"
-                    !fresh -> "OK — baliser (attente GPS)"
-                    !gpsOk -> "OK — baliser (±${acc.toInt()} m)"
-                    else -> "OK — baliser ce coin"
+                    progress != null -> trf("Mesure… %d %%", ((progress ?: 0f) * 100).toInt())
+                    !fresh -> tr("OK — baliser (attente GPS)")
+                    !gpsOk -> trf("OK — baliser (±%d m)", acc.toInt())
+                    else -> tr("OK — baliser ce coin")
                 },
                 icon = Icons.Filled.AddLocation,
                 enabled = progress == null,
@@ -282,13 +284,13 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
             )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GhostButton("Annuler le coin", Modifier.weight(1f), Icons.AutoMirrored.Filled.Undo) { Calibrator.undo() }
-                GhostButton("Recommencer", Modifier.weight(1f), Icons.Filled.Refresh) { Calibrator.reset() }
+                GhostButton(tr("Annuler le coin"), Modifier.weight(1f), Icons.AutoMirrored.Filled.Undo) { Calibrator.undo() }
+                GhostButton(tr("Recommencer"), Modifier.weight(1f), Icons.Filled.Refresh) { Calibrator.reset() }
             }
             if (saved != null && idx == 0) {
                 Spacer(Modifier.height(10.dp))
                 GhostButton(
-                    "Réutiliser le dernier balisage (${saved.lengthM.toInt()} × ${saved.widthM.toInt()} m)",
+                    trf("Réutiliser le dernier balisage (%d × %d m)", saved.lengthM.toInt(), saved.widthM.toInt()),
                     Modifier.fillMaxWidth(), Icons.Filled.History, tint = p.primary
                 ) { Calibrator.useCalibration(saved) }
             }
@@ -296,31 +298,31 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
             val gap = cal.diagonalGap
             val dl = abs(cal.lengthM - s.lengthM) / s.lengthM
             Panel(accent = p.primary.copy(alpha = 0.6f)) {
-                Label("Terrain balisé", color = p.primary)
+                Label(tr("Terrain balisé"), color = p.primary)
                 Spacer(Modifier.height(4.dp))
                 Text(String.format("%.1f × %.1f m", cal.lengthM, cal.widthM), style = Type.metric, color = p.text)
                 Spacer(Modifier.height(6.dp))
-                KeyValue("Surface", String.format("%.0f m²", cal.areaM2))
+                KeyValue(tr("Surface"), String.format("%.0f m²", cal.areaM2))
                 KeyValue(
-                    "Forme",
-                    if (gap < 0.04) "Rectangle correct" else String.format("Diagonales : %.0f %% d'écart", gap * 100),
+                    tr("Forme"),
+                    if (gap < 0.04) tr("Rectangle correct") else trf("Diagonales : %.0f %% d'écart", gap * 100),
                     if (gap < 0.04) p.primary else p.warning
                 )
                 if (dl > 0.25) {
                     Text(
-                        "Les dimensions s'éloignent du terrain standard : c'est normal pour un terrain amateur, sinon recommence.",
+                        tr("Les dimensions s'éloignent du terrain standard : c'est normal pour un terrain amateur, sinon recommence."),
                         style = Type.caption, color = p.muted
                     )
                 }
             }
             Spacer(Modifier.height(14.dp))
-            BigButton("Start", icon = Icons.Filled.PlayArrow, height = 72.dp) {
+            BigButton(tr("Start"), icon = Icons.Filled.PlayArrow, height = 72.dp) {
                 Tracker.start(s, cal)
                 TrackingService.start(ctx)
                 onStarted()
             }
             Spacer(Modifier.height(10.dp))
-            GhostButton("Refaire le balisage", Modifier.fillMaxWidth(), Icons.Filled.Refresh) { Calibrator.reset() }
+            GhostButton(tr("Refaire le balisage"), Modifier.fillMaxWidth(), Icons.Filled.Refresh) { Calibrator.reset() }
         }
         Spacer(Modifier.height(24.dp))
     }

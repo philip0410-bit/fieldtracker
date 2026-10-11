@@ -1,5 +1,7 @@
 package com.philip.fieldtracker.ui.screens
 
+import com.philip.fieldtracker.i18n.tr
+import com.philip.fieldtracker.i18n.trf
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.Canvas
@@ -127,9 +129,9 @@ fun AnalyticsScreen(onGoSetup: () -> Unit) {
     if (data == null) {
         if (!loading) {
             EmptyState(
-                "Aucune séance",
-                "Termine une séance ou importe les données d'un traqueur pour voir ton bilan.",
-                "Choisir un sport", onGoSetup
+                tr("Aucune séance"),
+                tr("Termine une séance ou importe les données d'un traqueur pour voir ton bilan."),
+                tr("Choisir un sport"), onGoSetup
             )
         }
         return
@@ -152,9 +154,9 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
         busy = true
         scope.launch {
             val msg = try {
-                HealthLink.writeSession(ctx, s, st); "Séance envoyée à Samsung Health (Health Connect)"
+                HealthLink.writeSession(ctx, s, st); tr("Séance envoyée à Samsung Health (Health Connect)")
             } catch (e: Exception) {
-                "Envoi impossible : ${e.message}"
+                trf("Envoi impossible : %s", e.message)
             }
             busy = false
             Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
@@ -163,7 +165,7 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
 
     val hcLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { granted ->
         if (granted.containsAll(HealthLink.permissions)) sendToHealth()
-        else Toast.makeText(ctx, "Autorisations Health Connect refusées", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(ctx, tr("Autorisations Health Connect refusées"), Toast.LENGTH_SHORT).show()
     }
 
     fun importHr() {
@@ -176,7 +178,7 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                     return@launch
                 }
                 val hr = HealthLink.readHeartRate(ctx, s.startMs, s.endMs)
-                if (hr.isEmpty()) "Aucune fréquence cardiaque trouvée dans Samsung Health pour cette séance"
+                if (hr.isEmpty()) tr("Aucune fréquence cardiaque trouvée dans Samsung Health pour cette séance")
                 else {
                     withContext(Dispatchers.Default) {
                         var j = 0
@@ -188,10 +190,10 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                         SessionStore.save(ctx, ns, StatsCalculator.compute(ns, AppState.profile.value))
                     }
                     AppState.historyChanged()
-                    "${hr.size} mesures de FC ajoutées"
+                    trf("%d mesures de FC ajoutées", hr.size)
                 }
             } catch (e: Exception) {
-                "Lecture impossible : ${e.message}"
+                trf("Lecture impossible : %s", e.message)
             }
             busy = false
             Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
@@ -207,54 +209,54 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
         // En-tête
         Row(verticalAlignment = Alignment.CenterVertically) {
             Pill(
-                if (s.source.startsWith("import:")) "Import · ${s.source.removePrefix("import:")}" else "Séance GPS",
+                if (s.source.startsWith("import:")) "Import · ${s.source.removePrefix("import:")}" else tr("Séance GPS"),
                 p.primary, modifier = Modifier.weight(1f, fill = false)
             )
             Spacer(Modifier.weight(1f))
             Text(formatDuration(st.activeMs), style = Type.label, color = p.muted)
         }
         Spacer(Modifier.height(8.dp))
-        Text(sport.name, style = Type.hero, color = p.text)
+        Text(tr(sport.name), style = Type.hero, color = p.text)
         Text(
-            SimpleDateFormat("EEEE d MMMM yyyy · HH:mm", Locale.FRANCE).format(Date(s.startMs))
+            SimpleDateFormat("EEEE d MMMM yyyy · HH:mm", com.philip.fieldtracker.i18n.I18n.locale).format(Date(s.startMs))
                 .replaceFirstChar { it.uppercase() },
             style = Type.body, color = p.muted
         )
         Label(
-            String.format("Terrain %s%.0f × %.0f m", if (s.calibration.estimated) "estimé " else "", s.calibration.lengthM, s.calibration.widthM),
+            trf("Terrain %s%.0f × %.0f m", if (s.calibration.estimated) tr("estimé ") else "", s.calibration.lengthM, s.calibration.widthM),
             color = p.muted, style = Type.caption
         )
         Spacer(Modifier.height(12.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GhostButton("Historique", icon = Icons.Filled.History, onClick = onHistory)
-            GhostButton("Exporter", icon = Icons.Filled.Share) {
+            GhostButton(tr("Historique"), icon = Icons.Filled.History, onClick = onHistory)
+            GhostButton(tr("Exporter"), icon = Icons.Filled.Share) {
                 try {
                     Exporter.share(ctx, listOf(Exporter.csv(ctx, s, st), Exporter.gpx(ctx, s)))
                 } catch (e: Exception) {
-                    Toast.makeText(ctx, "Export impossible : ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(ctx, trf("Export impossible : %s", e.message), Toast.LENGTH_LONG).show()
                 }
             }
-            if (hcAvailable) GhostButton(if (busy) "…" else "Samsung Health", icon = Icons.Filled.FavoriteBorder, tint = p.primary) {
+            if (hcAvailable) GhostButton(if (busy) "…" else tr("Samsung Health"), icon = Icons.Filled.FavoriteBorder, tint = p.primary) {
                 if (busy) return@GhostButton
                 scope.launch {
                     if (HealthLink.hasAllPermissions(ctx)) sendToHealth() else hcLauncher.launch(HealthLink.permissions)
                 }
             }
-            GhostButton("Supprimer", icon = Icons.Filled.Delete, tint = p.secondary) { confirmDelete = true }
+            GhostButton(tr("Supprimer"), icon = Icons.Filled.Delete, tint = p.secondary) { confirmDelete = true }
         }
         Spacer(Modifier.height(16.dp))
 
         // Heatmap
         Panel {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Carte de chaleur", style = Type.h2, color = p.text, modifier = Modifier.weight(1f))
+                Text(tr("Carte de chaleur"), style = Type.h2, color = p.text, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Chip("Plein", heatMode == 0) { heatMode = 0 }
-                Chip("Haute int.", heatMode == 1) { heatMode = 1 }
-                Chip("Sprints", heatMode == 2) { heatMode = 2 }
-                Chip("Trace", heatMode == 3) { heatMode = 3 }
+                Chip(tr("Plein"), heatMode == 0) { heatMode = 0 }
+                Chip(tr("Haute int."), heatMode == 1) { heatMode = 1 }
+                Chip(tr("Sprints"), heatMode == 2) { heatMode = 2 }
+                Chip(tr("Trace"), heatMode == 3) { heatMode = 3 }
             }
             Spacer(Modifier.height(10.dp))
             val heatImg = remember(s.id, st) { thermalImage(st.heat) }
@@ -292,7 +294,7 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Label("Faible", style = Type.caption)
+                Label(tr("Faible"), style = Type.caption)
                 Spacer(Modifier.width(8.dp))
                 Canvas(Modifier.weight(1f).height(6.dp)) {
                     val n = 30
@@ -304,13 +306,13 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                Label("Point chaud", style = Type.caption)
+                Label(tr("Point chaud"), style = Type.caption)
             }
         }
         Spacer(Modifier.height(16.dp))
 
         // Présence
-        SectionTitle("Présence sur le terrain", String.format("%.0f %% dans les limites", st.presence * 100))
+        SectionTitle(tr("Présence sur le terrain"), trf("%.0f %% dans les limites", st.presence * 100))
         val lenZones = st.zones.map { it.sum() }
         val widZones = (0 until 3).map { j -> st.zones.sumOf { it[j] } }
         val colors = listOf(p.primary, p.tertiary, p.secondary)
@@ -334,7 +336,7 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Label("Couloirs", style = Type.caption)
+            Label(tr("Couloirs"), style = Type.caption)
             Spacer(Modifier.height(4.dp))
             sport.zoneLabelsWidth().forEachIndexed { j, label ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 3.dp)) {
@@ -347,49 +349,49 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         // Métriques clés
-        SectionTitle("Métriques clés & intensité")
+        SectionTitle(tr("Métriques clés & intensité"))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard(
-                "Vitesse max", String.format("%.1f", st.maxSpeedKmh), "km/h", Modifier.weight(1f),
+                tr("Vitesse max"), String.format("%.1f", st.maxSpeedKmh), "km/h", Modifier.weight(1f),
                 icon = Icons.Filled.Speed, color = p.primary,
-                footer = String.format("Moyenne en mouvement %.1f km/h", st.avgSpeedKmh)
+                footer = trf("Moyenne en mouvement %.1f km/h", st.avgSpeedKmh)
             )
             MetricCard(
-                "Distance", formatKm(st.distanceM), unitKm(st.distanceM), Modifier.weight(1f),
+                tr("Distance"), formatKm(st.distanceM), unitKm(st.distanceM), Modifier.weight(1f),
                 icon = Icons.Filled.Straighten, color = p.text,
-                footer = "Dans le terrain : ${formatKm(st.distanceInFieldM)} ${unitKm(st.distanceInFieldM)}"
+                footer = trf("Dans le terrain : %s %s", formatKm(st.distanceInFieldM), unitKm(st.distanceInFieldM))
             )
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard(
-                "Sprints", "${st.sprints.size}", "", Modifier.weight(1f),
+                tr("Sprints"), "${st.sprints.size}", "", Modifier.weight(1f),
                 icon = Icons.Filled.Bolt, color = p.secondary,
                 footer = String.format("> %.0f km/h · %.0f m", sport.sprintKmh, st.sprintDistanceM)
             )
             MetricCard(
-                "Haute intensité", formatKm(st.hiDistanceM), unitKm(st.hiDistanceM), Modifier.weight(1f),
+                tr("Haute intensité"), formatKm(st.hiDistanceM), unitKm(st.hiDistanceM), Modifier.weight(1f),
                 icon = Icons.Filled.Timer, color = p.warning,
-                footer = String.format("> %.0f km/h · %d accélérations", sport.hiKmh, st.accelerations)
+                footer = trf("> %.0f km/h · %d accélérations", sport.hiKmh, st.accelerations)
             )
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard(
-                "Fréquence cardiaque", if (st.hrAvg > 0) "${st.hrAvg}" else "—", "bpm moy.", Modifier.weight(1f),
+                tr("Fréquence cardiaque"), if (st.hrAvg > 0) "${st.hrAvg}" else "—", tr("bpm moy."), Modifier.weight(1f),
                 icon = Icons.Filled.Favorite, color = if (st.hrAvg > 0) p.secondary else p.muted,
-                footer = if (st.hrMax > 0) "Pic : ${st.hrMax} bpm" else "Pas de FC enregistrée"
+                footer = if (st.hrMax > 0) "Pic : ${st.hrMax} bpm" else tr("Pas de FC enregistrée")
             )
             MetricCard(
-                "Calories", "${st.calories}", "kcal", Modifier.weight(1f),
+                tr("Calories"), "${st.calories}", "kcal", Modifier.weight(1f),
                 icon = Icons.Filled.LocalFireDepartment, color = p.text,
-                footer = if (st.hrAvg > 0) "Estimées avec la FC" else "Estimées avec la vitesse"
+                footer = if (st.hrAvg > 0) tr("Estimées avec la FC") else tr("Estimées avec la vitesse")
             )
         }
         if (st.hrAvg == 0 && hcAvailable) {
             Spacer(Modifier.height(10.dp))
             GhostButton(
-                if (busy) "Lecture…" else "Récupérer la FC depuis Samsung Health",
+                if (busy) tr("Lecture…") else tr("Récupérer la FC depuis Samsung Health"),
                 Modifier.fillMaxWidth(), Icons.Filled.FavoriteBorder, tint = p.secondary
             ) { if (!busy) importHr() }
         }
@@ -397,14 +399,14 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
 
         // Zones de vitesse
         Panel {
-            Text("Zones de vitesse", style = Type.h2, color = p.text)
+            Text(tr("Zones de vitesse"), style = Type.h2, color = p.text)
             Spacer(Modifier.height(8.dp))
             val maxT = st.bands.maxOf { it.timeMs }.coerceAtLeast(1)
             val bandColors = listOf(p.muted, p.tertiary, p.primary, p.warning, p.secondary)
             st.bands.forEachIndexed { i, b ->
                 Column(Modifier.padding(vertical = 5.dp)) {
                     Row {
-                        Text(b.label, style = Type.body, color = p.text, modifier = Modifier.weight(1f))
+                        Text(tr(b.label), style = Type.body, color = p.text, modifier = Modifier.weight(1f))
                         Text("${formatDuration(b.timeMs)} · ${formatKm(b.distM)} ${unitKm(b.distM)}", style = Type.caption, color = p.muted)
                     }
                     Spacer(Modifier.height(4.dp))
@@ -417,8 +419,8 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
         // Courbe d'intensité
         if (st.perMinute.size >= 2) {
             Panel {
-                Text("Courbe d'intensité", style = Type.h2, color = p.text)
-                Label("Distance parcourue par minute (m/min)", style = Type.caption)
+                Text(tr("Courbe d'intensité"), style = Type.h2, color = p.text)
+                Label(tr("Distance parcourue par minute (m/min)"), style = Type.caption)
                 Spacer(Modifier.height(10.dp))
                 IntensityChart(st.perMinute)
             }
@@ -428,10 +430,10 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
         // Zones cardio
         if (st.hrAvg > 0) {
             Panel {
-                Text("Zones cardio", style = Type.h2, color = p.text)
-                Label("FC max de référence : ${AppState.profile.value.hrMax} bpm", style = Type.caption)
+                Text(tr("Zones cardio"), style = Type.h2, color = p.text)
+                Label(trf("FC max de référence : %d bpm", AppState.profile.value.hrMax), style = Type.caption)
                 Spacer(Modifier.height(8.dp))
-                val names = listOf("Z1 Récup.", "Z2 Endurance", "Z3 Tempo", "Z4 Seuil", "Z5 Max")
+                val names = listOf(tr("Z1 Récup."), tr("Z2 Endurance"), tr("Z3 Tempo"), tr("Z4 Seuil"), tr("Z5 Max"))
                 val zc = listOf(p.muted, p.tertiary, p.primary, p.warning, p.secondary)
                 val tot = st.hrZonesMs.sum().coerceAtLeast(1)
                 names.forEachIndexed { i, n ->
@@ -448,11 +450,11 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
         // Temps forts & sprints
         if (s.highlights.isNotEmpty() || st.sprints.isNotEmpty()) {
             Panel {
-                Text("Temps forts", style = Type.h2, color = p.text)
+                Text(tr("Temps forts"), style = Type.h2, color = p.text)
                 Spacer(Modifier.height(6.dp))
                 val fmt = SimpleDateFormat("HH:mm:ss", Locale.FRANCE)
-                val items = s.highlights.map { it.t to it.label } +
-                    st.sprints.sortedByDescending { it.maxKmh }.take(5).map { it.t to String.format("Sprint à %.1f km/h (%.0f m)", it.maxKmh, it.distM) }
+                val items = s.highlights.map { it.t to tr(it.label) } +
+                    st.sprints.sortedByDescending { it.maxKmh }.take(5).map { it.t to trf("Sprint à %.1f km/h (%.0f m)", it.maxKmh, it.distM) }
                 items.sortedBy { it.first }.forEach { (t, label) ->
                     KeyValue(label, fmt.format(Date(t)))
                 }
@@ -465,17 +467,17 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor = p.elevated,
-            title = { Text("Supprimer cette séance ?", style = Type.h2, color = p.text) },
-            text = { Text("Cette action est définitive.", style = Type.body, color = p.muted) },
+            title = { Text(tr("Supprimer cette séance ?"), style = Type.h2, color = p.text) },
+            text = { Text(tr("Cette action est définitive."), style = Type.body, color = p.muted) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     SessionStore.delete(ctx, s.id)
                     AppState.selectSession(null)
                     AppState.historyChanged()
-                }) { Text("SUPPRIMER", style = Type.label, color = p.secondary) }
+                }) { Text(tr("SUPPRIMER"), style = Type.label, color = p.secondary) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("ANNULER", style = Type.label, color = p.text) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("ANNULER"), style = Type.label, color = p.text) } },
         )
     }
 }
@@ -572,7 +574,7 @@ private fun HistoryList(onBack: () -> Unit, onSelect: (String) -> Unit) {
     val version by AppState.historyVersion.collectAsState()
     var items by remember { mutableStateOf<List<SessionSummary>>(emptyList()) }
     LaunchedEffect(version) { items = withContext(Dispatchers.IO) { SessionStore.list(ctx) } }
-    val fmt = SimpleDateFormat("d MMM yyyy · HH:mm", Locale.FRANCE)
+    val fmt = SimpleDateFormat("d MMM yyyy · HH:mm", com.philip.fieldtracker.i18n.I18n.locale)
 
     Column(
         Modifier
@@ -583,17 +585,17 @@ private fun HistoryList(onBack: () -> Unit, onSelect: (String) -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconSquare(Icons.AutoMirrored.Filled.ArrowBack, p.text, onClick = onBack)
             Spacer(Modifier.width(12.dp))
-            Text("Historique", style = Type.h1, color = p.text)
+            Text(tr("Historique"), style = Type.h1, color = p.text)
         }
         Spacer(Modifier.height(12.dp))
-        if (items.isEmpty()) Text("Aucune séance enregistrée.", style = Type.body, color = p.muted)
+        if (items.isEmpty()) Text(tr("Aucune séance enregistrée."), style = Type.body, color = p.muted)
         items.forEach { it ->
             val sport = Sports.byId(it.sportId)
             Panel(modifier = Modifier.clickable { onSelect(it.id) }, padding = 12.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(sport?.name ?: it.sportId, style = Type.bodyBold, color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Label(fmt.format(Date(it.startMs)) + if (it.source.startsWith("import")) " · import" else "", style = Type.caption)
+                        Text(sport?.name?.let { tr(it) } ?: it.sportId, style = Type.bodyBold, color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Label(fmt.format(Date(it.startMs)) + if (it.source.startsWith("import")) tr(" · import") else "", style = Type.caption)
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text("${formatKm(it.distanceM)} ${unitKm(it.distanceM)}", style = Type.label, color = p.primary)
