@@ -253,7 +253,10 @@ fun FieldCanvas(
     overlay: DrawScope.(Rect) -> Unit = {},
 ) {
     val (tl, tw) = templateSize(sport.layout, sport.lengthM, sport.widthM)
-    val ratio = (tl / tw).toFloat().coerceIn(0.8f, 2.4f)
+    // Zone de jeu autour du terrain (tennis, volley…) : proportions du gabarit
+    val mL = sport.marginLM * tl / sport.lengthM
+    val mW = sport.marginWM * tw / sport.widthM
+    val ratio = ((tl + 2 * mL) / (tw + 2 * mW)).toFloat().coerceIn(0.8f, 2.4f)
     Canvas(
         modifier
             .fillMaxWidth()
@@ -262,7 +265,11 @@ fun FieldCanvas(
             .background(background)
     ) {
         val ins = inset.toPx()
-        val r = Rect(Offset(ins, ins), Size(size.width - 2 * ins, size.height - 2 * ins))
+        val avW = size.width - 2 * ins
+        val avH = size.height - 2 * ins
+        val fx = (mL / (tl + 2 * mL)).toFloat()
+        val fy = (mW / (tw + 2 * mW)).toFloat()
+        val r = fieldRect(sport, size.width, size.height, ins)
         // grille de points discrète
         val step = 22.dp.toPx()
         var x = step / 2
@@ -272,6 +279,16 @@ fun FieldCanvas(
                 drawCircle(lineColor.copy(alpha = 0.18f), 1.2f, Offset(x, y)); y += step
             }
             x += step
+        }
+        if (fx > 0f || fy > 0f) {
+            val o = Rect(Offset(ins, ins), Size(avW, avH))
+            drawRect(lineColor.copy(alpha = 0.08f), o.topLeft, o.size)
+            drawRect(
+                lineColor.copy(alpha = 0.5f), o.topLeft, o.size,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    1.5f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 8f))
+                )
+            )
         }
         drawFieldMarkings(sport.layout, r, sport.lengthM, sport.widthM, lineColor, strokeDp * density)
         overlay(r)
@@ -312,3 +329,15 @@ fun formatDuration(ms: Long): String {
 
 fun formatKm(m: Double): String = if (m < 1000) String.format("%.0f", m) else String.format("%.2f", m / 1000)
 fun unitKm(m: Double): String = if (m < 1000) "m" else "km"
+
+/** Rectangle du terrain (sans la zone autour) dans un canevas de taille w x h. */
+fun fieldRect(sport: Sport, w: Float, h: Float, insetPx: Float): Rect {
+    val (tl, tw) = templateSize(sport.layout, sport.lengthM, sport.widthM)
+    val mL = sport.marginLM * tl / sport.lengthM
+    val mW = sport.marginWM * tw / sport.widthM
+    val avW = w - 2 * insetPx
+    val avH = h - 2 * insetPx
+    val fx = (mL / (tl + 2 * mL)).toFloat()
+    val fy = (mW / (tw + 2 * mW)).toFloat()
+    return Rect(Offset(insetPx + avW * fx, insetPx + avH * fy), Size(avW * (1 - 2 * fx), avH * (1 - 2 * fy)))
+}

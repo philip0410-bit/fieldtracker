@@ -76,6 +76,8 @@ object StatsCalculator {
         val sport = s.sport
         val pts = s.points
         val hi = sport.hiKmh
+        val mu = sport.marginLM / sport.lengthM
+        val mv = sport.marginWM / sport.widthM
         val sp = sport.sprintKmh
         val bandsDef = listOf(
             Triple("Arrêt / marche", 0.0, 7.0),
@@ -124,7 +126,8 @@ object StatsCalculator {
             val segD = if (d / (dt / 1000.0) > 12.5) a.speed * dt / 1000.0 else d
             dist += segD
             val kmh = a.speed * 3.6
-            vmax = max(vmax, min(kmh, 45.0))
+            // vitesse max : 2 mesures de suite au-dessus (évite les pics isolés)
+            vmax = max(vmax, min(min(kmh, b.speed * 3.6), 45.0))
 
             val band = bandsDef.indexOfFirst { kmh >= it.second && kmh < it.third }.let { if (it < 0) 4 else it }
             bandTime[band] += dt
@@ -142,8 +145,13 @@ object StatsCalculator {
                 val zi = (a.u.coerceIn(0.0, 0.999) * 3).toInt()
                 val zj = (a.v.coerceIn(0.0, 0.999) * 3).toInt()
                 zones[zi][zj] += dt.toDouble()
-                val hx = (a.u.coerceIn(0.0, 0.999) * SessionStats.HX).toInt()
-                val hy = (a.v.coerceIn(0.0, 0.999) * SessionStats.HY).toInt()
+            }
+            // Carte de chaleur : terrain + zone de jeu autour (tennis, volley…)
+            val ue = (a.u + mu) / (1 + 2 * mu)
+            val ve = (a.v + mv) / (1 + 2 * mv)
+            if (ue in 0.0..0.999 && ve in 0.0..0.999) {
+                val hx = (ue * SessionStats.HX).toInt()
+                val hy = (ve * SessionStats.HY).toInt()
                 heat[hy * SessionStats.HX + hx] += dt.toFloat()
                 if (kmh >= hi) heatHi[hy * SessionStats.HX + hx] += dt.toFloat()
             }

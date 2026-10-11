@@ -57,7 +57,13 @@ object Tracker {
     private var pausedTotal = 0L
     private var pauseStart = 0L
     private var smoothSpeed = 0.0
-    private var lastLoc: Location? = null
+    private var prevSpeed = 0.0
+
+    /** Positions brutes en attente : on lisse avec ~2 positions de retard (quelques secondes). */
+    private data class RawFix(val t: Long, val lat: Double, val lon: Double, val acc: Double, val doppler: Double?)
+    private val buffer = ArrayDeque<RawFix>()
+    private var lastSmoothed: RawFix? = null
+    private var rejected = 0
     private var outSince = 0L
     private var outAlerted = false
     private var inSprint = false
@@ -79,7 +85,8 @@ object Tracker {
         calibration = cal
         points.clear(); hrSamples.clear(); highlights.clear(); trail.clear()
         startMs = System.currentTimeMillis()
-        pausedTotal = 0; pauseStart = 0; smoothSpeed = 0.0; lastLoc = null
+        pausedTotal = 0; pauseStart = 0; smoothSpeed = 0.0; prevSpeed = 0.0
+        buffer.clear(); lastSmoothed = null; rejected = 0
         outSince = 0; outAlerted = false; inSprint = false
         _live.value = LiveState(phase = Phase.RUNNING, sport = sport, startMs = startMs)
         WatchLink.pushState()
@@ -89,7 +96,7 @@ object Tracker {
     fun pause() {
         if (_live.value.phase != Phase.RUNNING) return
         pauseStart = System.currentTimeMillis()
-        lastLoc = null
+        buffer.clear(); lastSmoothed = null
         _live.value = _live.value.copy(phase = Phase.PAUSED, speedKmh = 0.0)
         WatchLink.pushState()
     }
@@ -126,27 +133,61 @@ object Tracker {
             _live.value = s.copy(hasFix = false, accuracy = acc)
             return
         }
-        val now = System.currentTimeMillis()
-        val prev = lastLoc
-        val dtS = if (prev != null) ((loc.time - prev.time) / 1000.0).coerceIn(0.2, 10.0) else 1.0
-        val raw = when {
-            loc.hasSpeed() -> loc.speed.toDouble()
-            prev != null -> Geo.distance(LatLon(prev.latitude, prev.longitude), LatLon(loc.latitude, loc.longitude)) / dtS
-            else -> 0.0
-        }.coerceIn(0.0, 12.5)
-        smoothSpeed = if (prev == null) raw else smoothSpeed * 0.45 + raw * 0.55
-
-        var add = 0.0
-        if (prev != null && smoothSpeed >= 0.4) {
-            val d = Geo.distance(LatLon(prev.latitude, prev.longitude), LatLon(loc.latitude, loc.longitude))
-            add = if (d / dtS > 12.5) smoothSpeed * dtS else d
+        val fix = RawFix(
+            loc.time.takeIf { it > 0 } ?: System.currentTimeMillis(), loc.latitude, loc.longitude,
+            acc.toDouble().coerceAtLeast(1.0), if (loc.hasSpeed()) loc.speed.toDouble() else null
+        )
+        // Rejet des sauts impossibles (> 12 m/s), sauf s'ils se répètent (vrai déplacement)
+        buffer.lastOrNull()?.let { last ->
+            val dt = ((fix.t - last.t) / 1000.0).coerceAtLeast(0.2)
+            val d = Geo.distance(LatLon(last.lat, last.lon), LatLon(fix.lat, fix.lon))
+            if (d > fix.acc + 5 && d / dt > 12.0 && rejected < 3) {
+                rejected++
+                return
+            }
         }
-        lastLoc = loc
+        rejected = 0
+        buffer.addLast(fix)
+        while (buffer.size > 6) buffer.removeFirst()
+        if (buffer.size < 3) {
+            _live.value = s.copy(hasFix = true, accuracy = acc)
+            return
+        }
 
-        val uv = cal.toUV(LatLon(loc.latitude, loc.longitude))
-        val inside = cal.isInside(uv)
+        // Point lissé : celui d'il y a 2 positions, moyenné avec ses voisins
+        val ti = buffer.size - 3
+        val target = buffer[ti]
+        var wSum = 0.0; var lat = 0.0; var lon = 0.0
+        for (i in buffer.indices) {
+            val k = kotlin.math.abs(i - ti)
+            if (k > 2) continue
+            val w = (1.0 / (buffer[i].acc * buffer[i].acc)) * (if (k == 0) 1.0 else if (k == 1) 0.6 else 0.3)
+            lat += buffer[i].lat * w; lon += buffer[i].lon * w; wSum += w
+        }
+        val cur = RawFix(target.t, lat / wSum, lon / wSum, target.acc, target.doppler)
+        val prevS = lastSmoothed
+        val dtS = if (prevS != null) ((cur.t - prevS.t) / 1000.0).coerceIn(0.2, 10.0) else 1.0
+        val dMoved = if (prevS != null) Geo.distance(LatLon(prevS.lat, prevS.lon), LatLon(cur.lat, cur.lon)) else 0.0
+        val dopplers = buffer.toList().subList((ti - 1).coerceAtLeast(0), (ti + 2).coerceAtMost(buffer.size)).mapNotNull { it.doppler }.sorted()
+        val doppler = if (dopplers.isNotEmpty()) dopplers[dopplers.size / 2] else null
+        val raw = when {
+            doppler != null && prevS != null -> 0.5 * doppler + 0.5 * (dMoved / dtS)
+            doppler != null -> doppler
+            else -> dMoved / dtS
+        }.coerceIn(0.0, 12.0)
+        prevSpeed = smoothSpeed
+        smoothSpeed = if (prevS == null) raw else smoothSpeed * 0.35 + raw * 0.65
+        // Arrêt : on ignore le "bruit" GPS quand on est immobile
+        if (smoothSpeed < 0.5) smoothSpeed = 0.0
+        val add = if (prevS != null && smoothSpeed >= 0.5) kotlin.math.min(dMoved, 12.0 * dtS) else 0.0
+        lastSmoothed = cur
+        val now = cur.t
+
+        val uv = cal.toUV(LatLon(cur.lat, cur.lon))
+        val sp0 = s.sport
+        val inside = if (sp0 != null) cal.isInside(uv, sp0.marginLM + 1.5, sp0.marginWM + 1.5) else cal.isInside(uv)
         val hr = HeartRateHub.current()
-        points.add(TrackPoint(now, loc.latitude, loc.longitude, uv[0], uv[1], smoothSpeed, hr, inside))
+        points.add(TrackPoint(now, cur.lat, cur.lon, uv[0], uv[1], smoothSpeed, hr, inside))
 
         trail.addLast(uv[0].toFloat() to uv[1].toFloat())
         while (trail.size > 240) trail.removeFirst()
@@ -182,7 +223,8 @@ object Tracker {
         _live.value = s.copy(
             distanceM = s.distanceM + add,
             speedKmh = kmh,
-            maxSpeedKmh = max(s.maxSpeedKmh, kmh),
+            // vitesse max : il faut 2 mesures de suite pour éviter les pics isolés
+            maxSpeedKmh = max(s.maxSpeedKmh, kotlin.math.min(smoothSpeed, prevSpeed) * 3.6),
             inField = inside,
             hasFix = true,
             zoneLabel = zone,

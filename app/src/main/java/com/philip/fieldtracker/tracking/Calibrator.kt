@@ -88,8 +88,18 @@ object Calibrator {
         _corners.value = _corners.value.toMutableList().also { it[idx] = p }
         Haptics.vibrate(AppState.appContext, Haptics.DOUBLE)
         if (currentIndex >= 4) {
-            _calibration.value = Calibration.normalized(_corners.value.filterNotNull(), sport.lengthM > sport.widthM)
-            _message.value = null
+            val c = _corners.value.filterNotNull()
+            val minSide = (0 until 4).minOf { com.philip.fieldtracker.data.Geo.distance(c[it], c[(it + 1) % 4]) }
+            if (minSide < 3.0) {
+                // Pas assez de pas détectés : terrain aux dimensions standard, orienté avec la boussole
+                val std = PdrEngine.standardCorners(sport.lengthM, sport.widthM, PdrEngine.surveyHeading0)
+                _corners.value = std
+                _calibration.value = Calibration(std, estimated = true)
+                _message.value = com.philip.fieldtracker.i18n.tr("Pas assez de pas détectés : terrain aux dimensions standard utilisé.")
+            } else {
+                _calibration.value = Calibration.normalized(c, sport.lengthM > sport.widthM)
+                _message.value = null
+            }
         }
         WatchLink.pushState()
     }
@@ -159,8 +169,22 @@ object HeartRateHub {
     var lastUpdateMs = 0L
         private set
 
-    fun push(bpm: Int, source: String) {
-        if (bpm !in 30..240) return
+    private val window = ArrayDeque<Int>()
+    private var pendingJump = 0
+
+    fun push(raw: Int, source: String) {
+        if (raw !in 35..220) return
+        val now = System.currentTimeMillis()
+        // Saut brutal (> 30 bpm) : accepté seulement s'il se confirme à la mesure suivante
+        val last = if (now - lastUpdateMs < 10_000) _bpm.value else 0
+        if (last > 0 && kotlin.math.abs(raw - last) > 30) {
+            if (pendingJump == 0 || kotlin.math.abs(raw - pendingJump) > 15) { pendingJump = raw; return }
+        }
+        pendingJump = 0
+        if (now - lastUpdateMs > 10_000) window.clear()
+        window.addLast(raw)
+        while (window.size > 3) window.removeFirst()
+        val bpm = window.sorted()[window.size / 2]
         _bpm.value = bpm
         _source.value = source
         lastUpdateMs = System.currentTimeMillis()

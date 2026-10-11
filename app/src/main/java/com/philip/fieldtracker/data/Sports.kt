@@ -5,7 +5,7 @@ import com.philip.fieldtracker.i18n.tr
 /** Tracé du terrain dessiné à l'écran. */
 enum class FieldLayout {
     SOCCER, FUTSAL, HANDBALL, RUGBY, AMERICAN, GAELIC, FIELD_HOCKEY, ICE_HOCKEY,
-    BASKETBALL, BASKET_HALF, NETBALL, TENNIS, PADEL, BADMINTON, PICKLEBALL, VOLLEY,
+    BASKETBALL, BASKET_HALF, NETBALL, TENNIS, PADEL, BADMINTON, PICKLEBALL, VOLLEY, TABLE_TENNIS,
     SQUASH, BASEBALL, CRICKET, OVAL, TRACK, ULTIMATE, GENERIC, GENERIC_THIRDS
 }
 
@@ -36,6 +36,12 @@ data class Sport(
     val hc: HcType = HcType.OTHER,
     /** Remarque affichée pour le balisage (formes non rectangulaires). */
     val note: String? = null,
+    /**
+     * Zone de jeu autour du terrain (m) : derrière les lignes de fond / sur les côtés.
+     * Ex. tennis : on joue souvent derrière la ligne de fond.
+     */
+    val marginLM: Double = 0.0,
+    val marginWM: Double = 0.0,
 ) {
     val dims: String
         get() = "${fmt(lengthM)} × ${fmt(widthM)} m"
@@ -71,7 +77,7 @@ object Sports {
         Sport("football8", "Football à 8", CAT_FOOT, 60.0, 45.0, FieldLayout.SOCCER, hiKmh = 18.0, sprintKmh = 24.0, hc = HcType.SOCCER),
         Sport("football7", "Football à 7", CAT_FOOT, 50.0, 35.0, FieldLayout.SOCCER, hiKmh = 18.0, sprintKmh = 24.0, hc = HcType.SOCCER),
         Sport("foot5", "Foot à 5 (five)", CAT_FOOT, 40.0, 20.0, FieldLayout.FUTSAL, hiKmh = 16.0, sprintKmh = 22.0, hc = HcType.SOCCER),
-        Sport("futsal", "Futsal", CAT_FOOT, 40.0, 20.0, FieldLayout.FUTSAL, indoor = true, hiKmh = 16.0, sprintKmh = 22.0, hc = HcType.SOCCER),
+        Sport("futsal", "Futsal", CAT_FOOT, 40.0, 20.0, FieldLayout.FUTSAL, indoor = true, hiKmh = 16.0, sprintKmh = 22.0, hc = HcType.SOCCER, marginLM = 1.0, marginWM = 1.0),
         Sport("beachsoccer", "Beach soccer", CAT_FOOT, 36.0, 27.0, FieldLayout.GENERIC, hiKmh = 14.0, sprintKmh = 19.0, hc = HcType.SOCCER),
         Sport("footus", "Football américain", CAT_FOOT, 109.7, 48.8, FieldLayout.AMERICAN, hc = HcType.FOOTBALL_AMERICAN),
         Sport("footca", "Football canadien", CAT_FOOT, 137.0, 59.0, FieldLayout.AMERICAN, hc = HcType.FOOTBALL_AMERICAN),
@@ -95,26 +101,27 @@ object Sports {
         Sport("bandy", "Bandy", CAT_STICK, 105.0, 65.0, FieldLayout.GENERIC, hiKmh = 24.0, sprintKmh = 30.0),
 
         // ---- Ballon à la main
-        Sport("handball", "Handball", CAT_HAND, 40.0, 20.0, FieldLayout.HANDBALL, indoor = true, hiKmh = 16.0, sprintKmh = 21.0, hc = HcType.HANDBALL),
-        Sport("beachhandball", "Beach handball", CAT_HAND, 27.0, 12.0, FieldLayout.HANDBALL, hiKmh = 13.0, sprintKmh = 18.0, hc = HcType.HANDBALL),
-        Sport("basketball", "Basketball", CAT_HAND, 28.0, 15.0, FieldLayout.BASKETBALL, indoor = true, hiKmh = 14.0, sprintKmh = 18.0, hc = HcType.BASKETBALL),
-        Sport("basket3x3", "Basket 3x3 (extérieur)", CAT_HAND, 15.0, 11.0, FieldLayout.BASKET_HALF, hiKmh = 13.0, sprintKmh = 17.0, hc = HcType.BASKETBALL),
-        Sport("netball", "Netball", CAT_HAND, 30.5, 15.25, FieldLayout.NETBALL, hiKmh = 14.0, sprintKmh = 18.0),
-        Sport("korfball", "Korfball", CAT_HAND, 40.0, 20.0, FieldLayout.GENERIC, indoor = true, hiKmh = 14.0, sprintKmh = 18.0),
+        Sport("handball", "Handball", CAT_HAND, 40.0, 20.0, FieldLayout.HANDBALL, indoor = true, hiKmh = 16.0, sprintKmh = 21.0, hc = HcType.HANDBALL, marginLM = 1.0, marginWM = 1.0),
+        Sport("beachhandball", "Beach handball", CAT_HAND, 27.0, 12.0, FieldLayout.HANDBALL, hiKmh = 13.0, sprintKmh = 18.0, hc = HcType.HANDBALL, marginLM = 2.0, marginWM = 2.0),
+        Sport("basketball", "Basketball", CAT_HAND, 28.0, 15.0, FieldLayout.BASKETBALL, indoor = true, hiKmh = 14.0, sprintKmh = 18.0, hc = HcType.BASKETBALL, marginLM = 2.0, marginWM = 2.0),
+        Sport("basket3x3", "Basket 3x3 (extérieur)", CAT_HAND, 15.0, 11.0, FieldLayout.BASKET_HALF, hiKmh = 13.0, sprintKmh = 17.0, hc = HcType.BASKETBALL, marginLM = 2.0, marginWM = 2.0),
+        Sport("netball", "Netball", CAT_HAND, 30.5, 15.25, FieldLayout.NETBALL, hiKmh = 14.0, sprintKmh = 18.0, marginLM = 2.0, marginWM = 2.0),
+        Sport("korfball", "Korfball", CAT_HAND, 40.0, 20.0, FieldLayout.GENERIC, indoor = true, hiKmh = 14.0, sprintKmh = 18.0, marginLM = 2.0, marginWM = 2.0),
         Sport("ultimate", "Ultimate frisbee", CAT_HAND, 100.0, 37.0, FieldLayout.ULTIMATE, hiKmh = 18.0, sprintKmh = 24.0, hc = HcType.FRISBEE),
-        Sport("tchoukball", "Tchoukball", CAT_HAND, 40.0, 20.0, FieldLayout.GENERIC, indoor = true, hiKmh = 14.0, sprintKmh = 18.0),
-        Sport("kabaddi", "Kabaddi", CAT_HAND, 13.0, 10.0, FieldLayout.GENERIC, hiKmh = 12.0, sprintKmh = 16.0),
-        Sport("dodgeball", "Balle au prisonnier / Dodgeball", CAT_HAND, 18.0, 9.0, FieldLayout.VOLLEY, hiKmh = 12.0, sprintKmh = 16.0, zoneMode = ZoneMode.GENERIC),
+        Sport("tchoukball", "Tchoukball", CAT_HAND, 40.0, 20.0, FieldLayout.GENERIC, indoor = true, hiKmh = 14.0, sprintKmh = 18.0, marginLM = 2.0, marginWM = 2.0),
+        Sport("kabaddi", "Kabaddi", CAT_HAND, 13.0, 10.0, FieldLayout.GENERIC, hiKmh = 12.0, sprintKmh = 16.0, marginLM = 2.0, marginWM = 2.0),
+        Sport("dodgeball", "Balle au prisonnier / Dodgeball", CAT_HAND, 18.0, 9.0, FieldLayout.VOLLEY, hiKmh = 12.0, sprintKmh = 16.0, zoneMode = ZoneMode.GENERIC, marginLM = 2.0, marginWM = 2.0),
 
         // ---- Raquette & filet
-        Sport("tennis", "Tennis", CAT_NET, 23.77, 10.97, FieldLayout.TENNIS, hiKmh = 12.0, sprintKmh = 16.0, zoneMode = ZoneMode.NET, hc = HcType.TENNIS),
+        Sport("tennis", "Tennis", CAT_NET, 23.77, 10.97, FieldLayout.TENNIS, hiKmh = 12.0, sprintKmh = 16.0, zoneMode = ZoneMode.NET, hc = HcType.TENNIS, marginLM = 6.4, marginWM = 3.66),
         Sport("padel", "Padel", CAT_NET, 20.0, 10.0, FieldLayout.PADEL, hiKmh = 11.0, sprintKmh = 15.0, zoneMode = ZoneMode.NET),
-        Sport("badminton", "Badminton", CAT_NET, 13.4, 6.1, FieldLayout.BADMINTON, indoor = true, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET, hc = HcType.BADMINTON),
-        Sport("pickleball", "Pickleball", CAT_NET, 13.41, 6.1, FieldLayout.PICKLEBALL, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET),
-        Sport("volleyball", "Volley-ball", CAT_NET, 18.0, 9.0, FieldLayout.VOLLEY, indoor = true, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET, hc = HcType.VOLLEYBALL),
-        Sport("beachvolley", "Beach-volley", CAT_NET, 16.0, 8.0, FieldLayout.VOLLEY, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET, hc = HcType.VOLLEYBALL),
-        Sport("footvolley", "Footvolley", CAT_NET, 18.0, 9.0, FieldLayout.VOLLEY, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET),
-        Sport("sepaktakraw", "Sepak takraw", CAT_NET, 13.4, 6.1, FieldLayout.VOLLEY, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET),
+        Sport("badminton", "Badminton", CAT_NET, 13.4, 6.1, FieldLayout.BADMINTON, indoor = true, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET, hc = HcType.BADMINTON, marginLM = 2.0, marginWM = 2.0),
+        Sport("pickleball", "Pickleball", CAT_NET, 13.41, 6.1, FieldLayout.PICKLEBALL, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET, marginLM = 3.0, marginWM = 2.0),
+        Sport("volleyball", "Volley-ball", CAT_NET, 18.0, 9.0, FieldLayout.VOLLEY, indoor = true, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET, hc = HcType.VOLLEYBALL, marginLM = 3.0, marginWM = 3.0),
+        Sport("beachvolley", "Beach-volley", CAT_NET, 16.0, 8.0, FieldLayout.VOLLEY, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET, hc = HcType.VOLLEYBALL, marginLM = 3.0, marginWM = 3.0),
+        Sport("footvolley", "Footvolley", CAT_NET, 18.0, 9.0, FieldLayout.VOLLEY, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET, marginLM = 3.0, marginWM = 3.0),
+        Sport("sepaktakraw", "Sepak takraw", CAT_NET, 13.4, 6.1, FieldLayout.VOLLEY, hiKmh = 10.0, sprintKmh = 14.0, zoneMode = ZoneMode.NET, marginLM = 3.0, marginWM = 3.0),
+        Sport("tennisdetable", "Tennis de table", CAT_NET, 2.74, 1.525, FieldLayout.TABLE_TENNIS, indoor = true, hiKmh = 7.0, sprintKmh = 10.0, zoneMode = ZoneMode.NET, hc = HcType.TABLE_TENNIS, note = "Coins = les 4 coins de la table.", marginLM = 5.6, marginWM = 2.74),
         Sport("squash", "Squash", CAT_NET, 9.75, 6.4, FieldLayout.SQUASH, indoor = true, hiKmh = 9.0, sprintKmh = 13.0, zoneMode = ZoneMode.GENERIC, hc = HcType.SQUASH),
 
         // ---- Batte

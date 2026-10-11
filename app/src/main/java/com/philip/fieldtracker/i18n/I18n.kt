@@ -339,6 +339,9 @@ object I18n {
         "Sans GPS : touche le terrain à l'endroit où tu es pour recaler ta position." to "No GPS: tap the field where you are to recalibrate your position.",
         "Depuis le coin précédent : %d pas · %.0f m" to "Since previous corner: %d steps · %.0f m",
         "Départ : au dernier coin balisé (là où tu es)." to "Start: at the last marked corner (where you are).",
+        "Pas assez de pas détectés : terrain aux dimensions standard utilisé." to "Not enough steps detected: standard field dimensions used.",
+        "Tennis de table" to "Table tennis",
+        "Coins = les 4 coins de la table." to "Corners = the 4 corners of the table.",
     )
 
     private val KO: Map<String, String> = mapOf(
@@ -651,6 +654,9 @@ object I18n {
         "Sans GPS : touche le terrain à l'endroit où tu es pour recaler ta position." to "GPS 없음: 현재 위치를 경기장에서 눌러 위치를 보정하세요.",
         "Depuis le coin précédent : %d pas · %.0f m" to "이전 코너부터: %d걸음 · %.0f m",
         "Départ : au dernier coin balisé (là où tu es)." to "출발: 마지막으로 설정한 코너 (현재 위치).",
+        "Pas assez de pas détectés : terrain aux dimensions standard utilisé." to "걸음이 충분히 감지되지 않아 표준 경기장 크기를 사용했습니다.",
+        "Tennis de table" to "탁구",
+        "Coins = les 4 coins de la table." to "코너 = 탁구대의 네 모서리.",
     )
 }
 

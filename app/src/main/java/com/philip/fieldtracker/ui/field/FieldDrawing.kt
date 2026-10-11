@@ -31,6 +31,7 @@ fun templateSize(layout: FieldLayout, fallbackL: Double, fallbackW: Double): Pai
     FieldLayout.BADMINTON -> 13.4 to 6.1
     FieldLayout.PICKLEBALL -> 13.41 to 6.1
     FieldLayout.VOLLEY -> 18.0 to 9.0
+    FieldLayout.TABLE_TENNIS -> 2.74 to 1.525
     FieldLayout.SQUASH -> 9.75 to 6.4
     FieldLayout.BASEBALL -> 120.0 to 120.0
     FieldLayout.CRICKET -> 150.0 to 130.0
@@ -329,6 +330,12 @@ fun DrawScope.drawFieldMarkings(
             pen.line(cx + 3.0, 0.0, cx + 3.0, tW)
         }
 
+        FieldLayout.TABLE_TENNIS -> {
+            drawRect(color.copy(alpha = color.alpha * 0.15f), rect.topLeft, rect.size)
+            pen.line(0.0, cy, tL, cy, thin)
+            pen.line(cx, -0.15, cx, tW + 0.15, strokePx * 2.5f)
+        }
+
         FieldLayout.SQUASH -> {
             pen.line(0.0, 0.0, 0.0, tW, strokePx * 3f)
             pen.line(5.44, 0.0, 5.44, tW)
@@ -407,4 +414,11 @@ fun DrawScope.drawFieldMarkings(
 /** Petite aide : chemin passant par une liste de points. */
 fun pathOf(points: List<Offset>): Path = Path().apply {
     points.forEachIndexed { i, o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) }
+}
+
+/** Rectangle de la zone de jeu (terrain + espace autour) à partir du rectangle du terrain. */
+fun outerRect(r: Rect, sport: com.philip.fieldtracker.data.Sport): Rect {
+    val mu = (sport.marginLM / sport.lengthM).toFloat()
+    val mv = (sport.marginWM / sport.widthM).toFloat()
+    return Rect(r.left - mu * r.width, r.top - mv * r.height, r.right + mu * r.width, r.bottom + mv * r.height)
 }

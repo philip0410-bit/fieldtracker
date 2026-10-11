@@ -523,6 +523,7 @@ private fun PdrCalibration(s: Sport, onStarted: () -> Unit) {
                 Label(tr("Terrain créé sans GPS"), color = p.primary)
                 Text(String.format("%.0f × %.0f m", cal.lengthM, cal.widthM), style = Type.metric, color = p.text)
                 Text(tr("Départ : au dernier coin balisé (là où tu es)."), style = Type.caption, color = p.muted)
+                Calibrator.message.collectAsState().value?.let { Text(it, style = Type.caption, color = p.warning) }
             }
             Spacer(Modifier.height(14.dp))
             BigButton(tr("Start"), icon = Icons.Filled.PlayArrow, height = 72.dp, enabled = granted) {

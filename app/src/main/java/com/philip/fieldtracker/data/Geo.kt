@@ -143,9 +143,9 @@ class Calibration(val corners: List<LatLon>, val estimated: Boolean = false) {
     }
 
     /** Dans le terrain, avec une tolérance en mètres. */
-    fun isInside(uv: DoubleArray, toleranceM: Double = 1.5): Boolean {
+    fun isInside(uv: DoubleArray, toleranceM: Double = 1.5, toleranceWM: Double = toleranceM): Boolean {
         val tu = toleranceM / lengthM.coerceAtLeast(1.0)
-        val tv = toleranceM / widthM.coerceAtLeast(1.0)
+        val tv = toleranceWM / widthM.coerceAtLeast(1.0)
         return uv[0] >= -tu && uv[0] <= 1 + tu && uv[1] >= -tv && uv[1] <= 1 + tv
     }
 

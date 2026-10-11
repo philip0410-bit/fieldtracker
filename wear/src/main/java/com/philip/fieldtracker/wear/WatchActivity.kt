@@ -144,10 +144,19 @@ class WatchActivity : ComponentActivity(), SensorEventListener {
         }
     }
 
+    /** Dernières mesures fiables, pour envoyer une valeur médiane (évite les valeurs aberrantes). */
+    private val recent = ArrayDeque<Int>()
+
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_HEART_RATE) return
-        val bpm = event.values.firstOrNull()?.toInt() ?: return
-        if (bpm <= 0) return
+        // Capteur pas au contact de la peau ou mesure peu fiable : on ignore
+        if (event.accuracy < SensorManager.SENSOR_STATUS_ACCURACY_LOW) return
+        val raw = event.values.firstOrNull()?.toInt() ?: return
+        if (raw !in 35..220) return
+        recent.addLast(raw)
+        while (recent.size > 5) recent.removeFirst()
+        if (recent.size < 3) return
+        val bpm = recent.sorted()[recent.size / 2]
         hr.intValue = bpm
         val now = System.currentTimeMillis()
         if (now - lastSent >= 2000) {

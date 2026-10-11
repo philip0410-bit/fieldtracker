@@ -45,6 +45,17 @@ object PdrEngine : SensorEventListener {
     val steps: StateFlow<Int> = _steps
 
     private val handler = Handler(Looper.getMainLooper())
+
+    /** Détection des pas par l'accéléromètre (plus fiable que le podomètre système sur certains téléphones). */
+    private var useAccel = false
+    private var lp = 9.81
+    private var mean = 9.81
+    private var above = false
+    private var lastAccelStep = 0L
+
+    /** Cap au moment où le coin 1 a été validé (secours si les pas ne sont pas détectés). */
+    var surveyHeading0 = 0f
+        private set
     private var running = false
     private var surveying = false
 
@@ -58,9 +69,20 @@ object PdrEngine : SensorEventListener {
         }
     }
 
+    private fun registerSteps(m: SensorManager) {
+        val acc = m.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        useAccel = acc != null
+        if (acc != null) {
+            lp = 9.81; mean = 9.81; above = false
+            m.registerListener(this, acc, SensorManager.SENSOR_DELAY_GAME)
+        } else {
+            m.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)?.let { m.registerListener(this, it, SensorManager.SENSOR_DELAY_FASTEST) }
+        }
+    }
+
     fun isAvailable(ctx: Context): Boolean {
         val m = ctx.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        return m.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null &&
+        return (m.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null || m.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null) &&
             m.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null
     }
 
@@ -86,8 +108,9 @@ object PdrEngine : SensorEventListener {
         _steps.value = 0
         val m = ctx.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         sm = m
-        m.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)?.let { m.registerListener(this, it, SensorManager.SENSOR_DELAY_FASTEST) }
+        registerSteps(m)
         m.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.let { m.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        surveyHeading0 = _heading.value
         surveying = true
     }
 
@@ -117,7 +140,7 @@ object PdrEngine : SensorEventListener {
         _steps.value = 0
         val m = ctx.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         sm = m
-        m.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)?.let { m.registerListener(this, it, SensorManager.SENSOR_DELAY_FASTEST) }
+        registerSteps(m)
         m.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.let { m.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         running = true
         handler.removeCallbacks(ticker)
@@ -155,7 +178,20 @@ object PdrEngine : SensorEventListener {
                 if (diff < -180) diff += 360
                 _heading.value = ((prev + diff * 0.25f) + 360f) % 360f
             }
-            Sensor.TYPE_STEP_DETECTOR -> if (running || surveying) onStep()
+            Sensor.TYPE_STEP_DETECTOR -> if ((running || surveying) && !useAccel) onStep()
+            Sensor.TYPE_ACCELEROMETER -> if (running || surveying) {
+                val mag = kotlin.math.sqrt((e.values[0] * e.values[0] + e.values[1] * e.values[1] + e.values[2] * e.values[2]).toDouble())
+                lp = lp * 0.75 + mag * 0.25
+                mean = mean * 0.98 + mag * 0.02
+                val now = System.currentTimeMillis()
+                // Un pas = passage au-dessus de la moyenne + 1,3 m/s² (au plus 1 pas / 0,28 s)
+                if (!above && lp > mean + 1.3) {
+                    above = true
+                    if (now - lastAccelStep > 280) { lastAccelStep = now; onStep() }
+                } else if (above && lp < mean + 0.3) {
+                    above = false
+                }
+            }
         }
     }
 
@@ -200,5 +236,19 @@ object PdrEngine : SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+
+    /** Terrain rectangle aux dimensions standard, orienté selon le cap pris au coin 1. */
+    fun standardCorners(lengthM: Double, widthM: Double, headingDeg: Float): List<LatLon> {
+        val h = Math.toRadians(headingDeg.toDouble())
+        val dir = doubleArrayOf(sin(h), cos(h))
+        val right = doubleArrayOf(cos(h), -sin(h))
+        fun pt(a: Double, b: Double) = Geo.fromLocal(SURVEY_ORIGIN, a, b)
+        return listOf(
+            pt(0.0, 0.0),
+            pt(dir[0] * lengthM, dir[1] * lengthM),
+            pt(dir[0] * lengthM + right[0] * widthM, dir[1] * lengthM + right[1] * widthM),
+            pt(right[0] * widthM, right[1] * widthM),
+        )
+    }
 
 }

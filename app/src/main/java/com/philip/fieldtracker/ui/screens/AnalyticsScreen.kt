@@ -267,15 +267,16 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                 when (heatMode) {
                     0, 1 -> {
                         val img = if (heatMode == 0) heatImg else heatHiImg
+                        val o = com.philip.fieldtracker.ui.field.outerRect(r, sport)
                         drawImage(
                             img,
-                            dstOffset = IntOffset(r.left.toInt(), r.top.toInt()),
-                            dstSize = IntSize(r.width.toInt(), r.height.toInt()),
+                            dstOffset = IntOffset(o.left.toInt(), o.top.toInt()),
+                            dstSize = IntSize(o.width.toInt(), o.height.toInt()),
                             filterQuality = FilterQuality.High,
                         )
                     }
                     2 -> st.sprints.forEach { sp ->
-                        val o = Offset(r.left + sp.u.toFloat().coerceIn(0f, 1f) * r.width, r.top + sp.v.toFloat().coerceIn(0f, 1f) * r.height)
+                        val o = Offset(r.left + sp.u.toFloat().coerceIn(-1f, 2f) * r.width, r.top + sp.v.toFloat().coerceIn(-1f, 2f) * r.height)
                         drawCircle(p.secondary.copy(alpha = 0.3f), 22f, o)
                         drawCircle(p.secondary, 9f, o)
                     }
@@ -284,7 +285,7 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                         var first = true
                         var prevT = 0L
                         s.points.forEach { pt ->
-                            val o = Offset(r.left + pt.u.toFloat().coerceIn(-0.05f, 1.05f) * r.width, r.top + pt.v.toFloat().coerceIn(-0.05f, 1.05f) * r.height)
+                            val o = Offset(r.left + pt.u.toFloat().coerceIn(-1f, 2f) * r.width, r.top + pt.v.toFloat().coerceIn(-1f, 2f) * r.height)
                             if (first || pt.t - prevT > 5000) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
                             first = false; prevT = pt.t
                         }

@@ -217,15 +217,16 @@ fun LiveScreen(onGoCalib: () -> Unit) {
                 if (!pdr) Modifier else Modifier.pointerInput(Unit) {
                     detectTapGestures { o ->
                         val ins = with(density) { 18.dp.toPx() }
-                        val u = ((o.x - ins) / (size.width - 2 * ins)).coerceIn(0f, 1f)
-                        val v = ((o.y - ins) / (size.height - 2 * ins)).coerceIn(0f, 1f)
+                        val fr = com.philip.fieldtracker.ui.components.fieldRect(s, size.width.toFloat(), size.height.toFloat(), ins)
+                        val u = ((o.x - fr.left) / fr.width).coerceIn(-1f, 2f)
+                        val v = ((o.y - fr.top) / fr.height).coerceIn(-1f, 2f)
                         com.philip.fieldtracker.tracking.PdrEngine.anchor(u.toDouble(), v.toDouble())
                         com.philip.fieldtracker.tracking.Haptics.vibrate(ctx, com.philip.fieldtracker.tracking.Haptics.SHORT)
                     }
                 }
             ) {
                 FieldCanvas(s) { r ->
-                    fun pt(u: Float, v: Float) = Offset(r.left + u.coerceIn(-0.05f, 1.05f) * r.width, r.top + v.coerceIn(-0.05f, 1.05f) * r.height)
+                    fun pt(u: Float, v: Float) = Offset(r.left + u.coerceIn(-1f, 2f) * r.width, r.top + v.coerceIn(-1f, 2f) * r.height)
                     val trail = live.trail
                     if (trail.size >= 2) {
                         drawPath(
@@ -242,16 +243,18 @@ fun LiveScreen(onGoCalib: () -> Unit) {
                         drawCircle(p.bg, 5f, o)
                     }
                 }
-                Box(
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                        .clip(Shape8)
-                        .background(p.elevated.copy(alpha = 0.92f))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(trf("Vitesse max : %.1f km/h · Sprints : %d", live.maxSpeedKmh, live.sprints), style = Type.caption, color = p.text)
-                }
+            }
+            // Infos sous le terrain (et non plus par-dessus)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(Shape8)
+                    .background(p.elevated)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(trf("Vitesse max : %.1f km/h · Sprints : %d", live.maxSpeedKmh, live.sprints), style = Type.label, color = p.text)
             }
             Spacer(Modifier.height(12.dp))
 
