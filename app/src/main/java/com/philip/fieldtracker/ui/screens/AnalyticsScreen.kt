@@ -147,6 +147,7 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
     val sport = s.sport
     var heatMode by remember(s.id) { mutableStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var showExport by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     val hcAvailable = remember { HealthLink.isAvailable(ctx) }
 
@@ -229,13 +230,7 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GhostButton(tr("Historique"), icon = Icons.Filled.History, onClick = onHistory)
-            GhostButton(tr("Exporter"), icon = Icons.Filled.Share) {
-                try {
-                    Exporter.share(ctx, listOf(Exporter.csv(ctx, s, st), Exporter.gpx(ctx, s)))
-                } catch (e: Exception) {
-                    Toast.makeText(ctx, trf("Export impossible : %s", e.message), Toast.LENGTH_LONG).show()
-                }
-            }
+            GhostButton(tr("Partager"), icon = Icons.Filled.Share, tint = p.primary) { showExport = true }
             if (hcAvailable) GhostButton(if (busy) "…" else tr("Samsung Health"), icon = Icons.Filled.FavoriteBorder, tint = p.primary) {
                 if (busy) return@GhostButton
                 scope.launch {
@@ -464,6 +459,8 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
         }
     }
 
+    if (showExport) ExportDialog(s, st) { showExport = false }
+
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -484,7 +481,7 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
 }
 
 /** Dégradé type caméra thermique : vert -> jaune -> orange -> rouge. */
-private val thermalStops = listOf(
+internal val thermalStops = listOf(
     0.00f to Color(0xFF16A34A),
     0.35f to Color(0xFF84CC16),
     0.55f to Color(0xFFFACC15),
@@ -492,7 +489,7 @@ private val thermalStops = listOf(
     1.00f to Color(0xFFDC2626),
 )
 
-private fun thermal(v: Float): Color {
+internal fun thermal(v: Float): Color {
     val x = v.coerceIn(0f, 1f)
     for (i in 1 until thermalStops.size) {
         val (p1, c1) = thermalStops[i - 1]
@@ -506,7 +503,7 @@ private fun thermal(v: Float): Color {
  * Carte de chaleur lisse : la grille de présence est agrandie par interpolation
  * bilinéaire puis colorée du vert (peu de temps) au rouge (zone la plus occupée).
  */
-private fun thermalImage(grid: FloatArray): ImageBitmap {
+internal fun thermalImage(grid: FloatArray): ImageBitmap {
     val gw = SessionStats.HX
     val gh = SessionStats.HY
     val scale = 6
@@ -613,4 +610,98 @@ private fun HistoryList(onBack: () -> Unit, onSelect: (String) -> Unit) {
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+
+/** Choix des formats à partager / enregistrer. */
+@Composable
+private fun ExportDialog(s: Session, st: SessionStats, onClose: () -> Unit) {
+    val p = LocalPalette.current
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val selected = remember {
+        androidx.compose.runtime.mutableStateListOf(
+            com.philip.fieldtracker.export.ExportKind.SUMMARY,
+            com.philip.fieldtracker.export.ExportKind.MOVES,
+        )
+    }
+    var working by remember { mutableStateOf(false) }
+
+    fun run(save: Boolean) {
+        if (selected.isEmpty() || working) return
+        working = true
+        scope.launch {
+            val msg = try {
+                val files = withContext(Dispatchers.Default) {
+                    com.philip.fieldtracker.export.ReportExport.build(ctx, selected.toSet(), s, st, p)
+                }
+                if (save && android.os.Build.VERSION.SDK_INT >= 29) {
+                    val n = withContext(Dispatchers.IO) { com.philip.fieldtracker.export.ReportExport.saveToDownloads(ctx, files) }
+                    trf("%d fichier(s) enregistré(s) dans Téléchargements/FieldTracker", n)
+                } else {
+                    com.philip.fieldtracker.export.ReportExport.share(ctx, files)
+                    null
+                }
+            } catch (e: Throwable) {
+                trf("Export impossible : %s", e.message)
+            }
+            working = false
+            msg?.let { Toast.makeText(ctx, it, Toast.LENGTH_LONG).show() }
+            onClose()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!working) onClose() },
+        containerColor = p.elevated,
+        title = { Text(tr("Partager la séance"), style = Type.h2, color = p.text) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(tr("Choisis ce que tu veux exporter :"), style = Type.body, color = p.muted)
+                Spacer(Modifier.height(8.dp))
+                com.philip.fieldtracker.export.ExportKind.entries.forEach { k ->
+                    val on = k in selected
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(Shape8)
+                            .clickable { if (on) selected.remove(k) else selected.add(k) }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = on,
+                            onCheckedChange = { if (it) selected.add(k) else selected.remove(k) },
+                            colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                checkedColor = p.primary, checkmarkColor = p.onPrimary, uncheckedColor = p.muted,
+                            ),
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(tr(k.label), style = Type.bodyBold, color = p.text)
+                            Text(tr(k.desc), style = Type.caption, color = p.muted)
+                        }
+                    }
+                }
+                if (working) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(tr("Préparation…"), style = Type.label, color = p.primary)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { run(save = false) }, enabled = selected.isNotEmpty() && !working) {
+                Text(tr("PARTAGER"), style = Type.label, color = if (selected.isNotEmpty()) p.primary else p.muted)
+            }
+        },
+        dismissButton = {
+            Row {
+                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    TextButton(onClick = { run(save = true) }, enabled = selected.isNotEmpty() && !working) {
+                        Text(tr("ENREGISTRER"), style = Type.label, color = p.text)
+                    }
+                }
+                TextButton(onClick = onClose, enabled = !working) { Text(tr("ANNULER"), style = Type.label, color = p.muted) }
+            }
+        },
+    )
 }

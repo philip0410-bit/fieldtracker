@@ -9,9 +9,9 @@ import java.time.Instant
 
 object Exporter {
 
-    private fun dir(ctx: Context) = File(ctx.cacheDir, "exports").apply { mkdirs() }
+    fun dir(ctx: Context) = File(ctx.cacheDir, "exports").apply { mkdirs() }
 
-    private fun baseName(s: Session): String {
+    fun baseName(s: Session): String {
         val d = java.text.SimpleDateFormat("yyyy-MM-dd_HHmm", java.util.Locale.FRANCE).format(java.util.Date(s.startMs))
         return "FieldTracker_${s.sportId}_$d"
     }
