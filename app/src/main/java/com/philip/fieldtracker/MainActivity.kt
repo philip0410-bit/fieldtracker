@@ -118,6 +118,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         WatchLink.refresh()
         WatchLink.pushState(force = true)
+        WatchLink.pushConfig()
     }
 }
 

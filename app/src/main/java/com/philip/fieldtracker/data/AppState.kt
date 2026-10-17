@@ -24,8 +24,8 @@ object AppState {
     private val _outAlert = MutableStateFlow(true)
     val outAlert: StateFlow<Boolean> = _outAlert
 
-    /** "gps" (satellites) ou "pdr" (sans GPS : podomètre + boussole). */
-    private val _positionMode = MutableStateFlow("gps")
+    /** "watch" (GPS de la montre), "gps" (GPS du téléphone) ou "pdr" (sans GPS : podomètre + boussole). */
+    private val _positionMode = MutableStateFlow("watch")
     val positionMode: StateFlow<String> = _positionMode
 
     private val _keepScreenOn = MutableStateFlow(true)
@@ -47,7 +47,9 @@ object AppState {
         _theme.value = prefs.getString("theme", "system") ?: "system"
         _outAlert.value = prefs.getBoolean("outAlert", true)
         _keepScreenOn.value = prefs.getBoolean("keepScreenOn", true)
-        _positionMode.value = prefs.getString("positionMode", "gps") ?: "gps"
+        // Nouvelle version : la montre devient la source par défaut
+        if (!prefs.getBoolean("posModeV2", false)) prefs.edit().putString("positionMode", "watch").putBoolean("posModeV2", true).apply()
+        _positionMode.value = prefs.getString("positionMode", "watch") ?: "watch"
         _profile.value = Profile(
             age = prefs.getInt("age", 30),
             weightKg = prefs.getFloat("weight", 75f).toDouble(),
@@ -63,17 +65,20 @@ object AppState {
     fun setPositionMode(m: String) {
         _positionMode.value = m
         prefs.edit().putString("positionMode", m).apply()
+        com.philip.fieldtracker.watch.WatchLink.pushConfig()
     }
 
     fun setLang(l: String) {
         com.philip.fieldtracker.i18n.I18n.setLang(l)
         prefs.edit().putString("lang", l).apply()
         com.philip.fieldtracker.watch.WatchLink.pushState(force = true)
+        com.philip.fieldtracker.watch.WatchLink.pushConfig()
     }
 
     fun selectSport(s: Sport) {
         _sport.value = s
         prefs.edit().putString("sport", s.id).apply()
+        com.philip.fieldtracker.watch.WatchLink.pushConfig()
     }
 
     fun setTheme(id: String) {

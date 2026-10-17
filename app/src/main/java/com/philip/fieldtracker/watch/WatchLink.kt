@@ -2,7 +2,21 @@ package com.philip.fieldtracker.watch
 
 import com.philip.fieldtracker.i18n.tr
 import com.philip.fieldtracker.i18n.trf
+import com.google.android.gms.tasks.Tasks
+import com.google.android.gms.wearable.Asset
+import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.MessageEvent
+import com.google.android.gms.wearable.PutDataMapRequest
+import com.philip.fieldtracker.data.Calibration
+import com.philip.fieldtracker.data.LatLon
+import com.philip.fieldtracker.data.RawFix
+import com.philip.fieldtracker.data.Session
+import com.philip.fieldtracker.data.SessionStore
+import com.philip.fieldtracker.data.Sports
+import com.philip.fieldtracker.data.StatsCalculator
+import com.philip.fieldtracker.data.Highlight
+import com.philip.fieldtracker.data.TrackSmoother
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
 import com.philip.fieldtracker.data.AppState
@@ -75,6 +89,74 @@ object WatchLink {
                 }
             }
         }
+    }
+
+    /**
+     * Envoie à la montre le sport choisi et les réglages (synchronisé même si la
+     * montre est loin : elle le reçoit dès qu'elle se reconnecte).
+     */
+    fun pushConfig() {
+        if (!isReady()) return
+        val sport = AppState.sport.value ?: return
+        scope.launch {
+            try {
+                val req = PutDataMapRequest.create("/ft/config").apply {
+                    dataMap.putString("sportId", sport.id)
+                    dataMap.putString("sportName", tr(sport.name))
+                    dataMap.putDouble("lengthM", sport.lengthM)
+                    dataMap.putDouble("widthM", sport.widthM)
+                    dataMap.putDouble("marginLM", sport.marginLM)
+                    dataMap.putDouble("marginWM", sport.marginWM)
+                    dataMap.putDouble("sprintKmh", sport.sprintKmh)
+                    dataMap.putString("lang", com.philip.fieldtracker.i18n.I18n.lang)
+                    dataMap.putString("source", if (AppState.positionMode.value == "watch") "watch" else "phone")
+                    dataMap.putLong("ts", System.currentTimeMillis())
+                }.asPutDataRequest().setUrgent()
+                Wearable.getDataClient(AppState.appContext).putDataItem(req).await()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /**
+     * Séance enregistrée par la montre (GPS + cardio de la montre) :
+     * lissage, statistiques et enregistrement dans l'historique.
+     * Renvoie l'id de la séance ou null.
+     */
+    fun importWatchSession(json: JSONObject): String? {
+        val sport = Sports.byId(json.optString("sportId")) ?: AppState.sport.value ?: return null
+        val ca = json.getJSONArray("corners")
+        if (ca.length() != 4) return null
+        val corners = (0 until 4).map { val p = ca.getJSONArray(it); LatLon(p.getDouble(0), p.getDouble(1)) }
+        val cal = Calibration.normalized(corners, sport.lengthM > sport.widthM)
+        val fa = json.getJSONArray("fixes")
+        val raw = (0 until fa.length()).map {
+            val a = fa.getJSONArray(it)
+            val sp = a.optDouble(4, -1.0)
+            RawFix(a.getLong(0), a.getDouble(1), a.getDouble(2), a.getDouble(3), if (sp >= 0) sp else null)
+        }
+        val ha = json.optJSONArray("hr") ?: org.json.JSONArray()
+        val hr = (0 until ha.length()).map { val a = ha.getJSONArray(it); a.getLong(0) to a.getInt(1) }
+        val pts = TrackSmoother.smooth(raw, cal, sport, hr)
+        if (pts.size < 2) return null
+        val ma = json.optJSONArray("marks") ?: org.json.JSONArray()
+        val id = json.optString("id").ifEmpty { java.util.UUID.randomUUID().toString() }
+        val session = Session(
+            id = id,
+            sportId = sport.id,
+            startMs = json.optLong("start", pts.first().t),
+            endMs = json.optLong("end", pts.last().t),
+            activeMs = json.optLong("active", pts.last().t - pts.first().t),
+            calibration = cal,
+            points = pts,
+            hrSamples = hr,
+            highlights = (0 until ma.length()).map { Highlight(ma.getLong(it), tr("Temps fort (montre)")) },
+            source = "watch",
+        )
+        val ctx = AppState.appContext
+        SessionStore.save(ctx, session, StatsCalculator.compute(session, AppState.profile.value))
+        AppState.saveCalibration(sport.id, cal)
+        return id
     }
 
     /** Envoie l'état courant à la montre (limité à ~3 envois/s). */
@@ -153,7 +235,7 @@ object WatchLink {
                 "mark" -> Tracker.mark(tr("Temps fort (montre)"))
                 "stop" -> try { TrackingService.stop(ctx) } catch (_: Exception) { Tracker.stop(ctx) }
             }
-            PATH_HELLO -> refresh()
+            PATH_HELLO -> { refresh(); pushConfig() }
         }
         pushState(force = true)
     }
@@ -161,6 +243,38 @@ object WatchLink {
 
 /** Reçoit les messages de la montre, même quand l'app est en arrière-plan. */
 class PhoneWearService : WearableListenerService() {
+
+    /** Réception d'une séance enregistrée par la montre (appelé sur un fil secondaire). */
+    override fun onDataChanged(events: DataEventBuffer) {
+        AppState.init(this)
+        val items = events.filter {
+            it.type == com.google.android.gms.wearable.DataEvent.TYPE_CHANGED &&
+                it.dataItem.uri.path?.startsWith("/ft/session/") == true
+        }
+            .map { it.dataItem.freeze() }
+        for (item in items) {
+            try {
+                val asset: Asset = DataMapItem.fromDataItem(item).dataMap.getAsset("data") ?: continue
+                val fd = Tasks.await(Wearable.getDataClient(this).getFdForAsset(asset))
+                val bytes = fd.inputStream.use { java.util.zip.GZIPInputStream(it).readBytes() }
+                val json = JSONObject(String(bytes))
+                val id = json.optString("id")
+                val already = SessionStore.list(this).any { it.id == id }
+                val saved = if (already) id else WatchLink.importWatchSession(json)
+                if (saved != null) {
+                    // Accusé de réception : la montre peut effacer sa copie
+                    Tasks.await(Wearable.getMessageClient(this).sendMessage(item.uri.host ?: "", "/ft/ack", id.toByteArray()))
+                    Tasks.await(Wearable.getDataClient(this).deleteDataItems(item.uri))
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        AppState.selectSession(saved)
+                        AppState.historyChanged()
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     override fun onMessageReceived(event: MessageEvent) {
         AppState.init(this)
         val path = event.path

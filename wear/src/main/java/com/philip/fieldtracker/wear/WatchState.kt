@@ -5,6 +5,9 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataMap
+import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
@@ -77,7 +80,8 @@ object WatchState {
                 // Coin validé -> double vibration au poignet
                 if (next.phase == prev.phase && next.corner > prev.corner) vibrate(ctx, longArrayOf(0, 80, 90, 80))
                 if (prev.phase == "calib" && next.phase == "ready") vibrate(ctx, longArrayOf(0, 120, 80, 120, 80, 250))
-                if (next.phase == "live" || next.phase == "paused") _summary.value = null
+                // Nouvelle séance ou nouveau balisage : on efface le bilan précédent
+                if (next.phase != "none" && next.phase != prev.phase) _summary.value = null
                 _state.value = next
                 _connected.value = true
             } catch (_: Exception) {
@@ -90,8 +94,47 @@ object WatchState {
                     o.optLong("active", 0), System.currentTimeMillis()
                 )
                 vibrate(ctx, longArrayOf(0, 200))
+                // Retour automatique à l'écran normal après 20 s
+                scope.launch { kotlinx.coroutines.delay(20_000); _summary.value = null }
             } catch (_: Exception) {
             }
+            "/ft/ack" -> {
+                WatchRecorder.init(ctx)
+                android.os.Handler(android.os.Looper.getMainLooper()).post { WatchRecorder.onAck(data.trim()) }
+            }
+        }
+    }
+
+    fun clearSummary() { _summary.value = null }
+
+    fun parseConfig(m: DataMap) = WatchConfig(
+        sportId = m.getString("sportId", ""),
+        sportName = m.getString("sportName", ""),
+        lengthM = m.getDouble("lengthM", 105.0),
+        widthM = m.getDouble("widthM", 68.0),
+        marginLM = m.getDouble("marginLM", 0.0),
+        marginWM = m.getDouble("marginWM", 0.0),
+        sprintKmh = m.getDouble("sprintKmh", 25.2),
+        lang = m.getString("lang", "fr"),
+        source = m.getString("source", "watch"),
+    )
+
+    /** Lit la dernière config envoyée par le téléphone (même si l'app montre était fermée). */
+    fun loadConfig(ctx: Context) {
+        val app = ctx.applicationContext
+        scope.launch {
+            try {
+                val items = Wearable.getDataClient(app).dataItems.await()
+                for (it in items) {
+                    if (it.uri.path == "/ft/config") {
+                        val c = parseConfig(DataMapItem.fromDataItem(it).dataMap)
+                        kotlinx.coroutines.withContext(Dispatchers.Main) { WatchRecorder.applyConfig(c) }
+                    }
+                }
+                items.release()
+            } catch (_: Exception) {
+            }
+            kotlinx.coroutines.withContext(Dispatchers.Main) { WatchRecorder.syncPending() }
         }
     }
 
@@ -127,6 +170,21 @@ class WatchListenerService : WearableListenerService() {
     override fun onMessageReceived(event: MessageEvent) {
         WatchState.onMessage(this, event.path, String(event.data))
     }
+
+    override fun onDataChanged(events: DataEventBuffer) {
+        WatchRecorder.init(this)
+        val configs = events.filter {
+            it.type == com.google.android.gms.wearable.DataEvent.TYPE_CHANGED && it.dataItem.uri.path == "/ft/config"
+        }
+            .map { WatchState.parseConfig(DataMapItem.fromDataItem(it.dataItem).dataMap) }
+        if (configs.isNotEmpty()) {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                WatchRecorder.applyConfig(configs.last())
+                // Téléphone joignable : on renvoie les séances en attente
+                WatchRecorder.syncPending()
+            }
+        }
+    }
 }
 
 /** Textes de la montre en français, anglais et coréen (langue choisie sur le téléphone). */
@@ -145,6 +203,21 @@ object WatchText {
         "Séance terminée" to ("Session finished" to "운동 종료"),
         "%d sprints" to ("%d sprints" to "스프린트 %d회"),
         "Bilan complet sur le téléphone" to ("Full report on the phone" to "전체 리포트는 휴대폰에서"),
+        "GPS montre" to ("Watch GPS" to "워치 GPS"),
+        "Recherche GPS…" to ("Searching GPS…" to "GPS 검색 중…"),
+        "Va à découvert" to ("Move into the open" to "트인 곳으로 이동하세요"),
+        "Autoriser GPS + cardio" to ("Allow GPS + heart rate" to "GPS + 심박 허용"),
+        "Cette montre n'a pas de GPS" to ("This watch has no GPS" to "이 워치에는 GPS가 없습니다"),
+        "Choisis le sport sur le téléphone (une fois)" to ("Choose the sport on the phone (once)" to "휴대폰에서 스포츠를 한 번 선택하세요"),
+        "Mesure…" to ("Measuring…" to "측정 중…"),
+        "Réutiliser" to ("Reuse" to "다시 사용"),
+        "Refaire" to ("Redo" to "다시"),
+        "Annuler" to ("Undo" to "취소"),
+        "Nouvelle séance" to ("New session" to "새 운동"),
+        "Envoi au téléphone…" to ("Sending to phone…" to "휴대폰으로 전송 중…"),
+        "En attente du téléphone" to ("Waiting for phone" to "휴대폰 대기 중"),
+        "Envoyé au téléphone ✓" to ("Sent to phone ✓" to "휴대폰으로 전송됨 ✓"),
+        "Télécommande du téléphone" to ("Phone remote" to "휴대폰 리모컨"),
     )
 
     fun t(fr: String, lang: String): String = when (lang) {

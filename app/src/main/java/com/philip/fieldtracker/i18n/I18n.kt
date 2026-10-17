@@ -407,6 +407,17 @@ object I18n {
         "Départ" to "Start",
         "Arrivée" to "Finish",
         "Présence par zone" to "Time per zone",
+        "GPS montre" to "Watch GPS",
+        "GPS téléphone" to "Phone GPS",
+        "Tout se fait sur la montre" to "Everything happens on the watch",
+        "Montre connectée : %s" to "Watch connected: %s",
+        "Montre non connectée pour l'instant" to "Watch not connected right now",
+        "Le sport choisi (%s) est envoyé automatiquement à la montre." to "The chosen sport (%s) is sent to the watch automatically.",
+        "Sur la montre, ouvre FieldTracker. Place-toi sur chaque coin du terrain et appuie sur OK (4 coins)." to "On the watch, open FieldTracker. Stand on each corner of the field and press OK (4 corners).",
+        "Appuie sur START sur la montre. Le téléphone peut rester au vestiaire." to "Press START on the watch. The phone can stay in the locker room.",
+        "Pour finir : appui long sur ■. La séance est envoyée au téléphone dès qu'il est à portée et apparaît dans l'onglet Analyse." to "To finish: long press ■. The session is sent to the phone as soon as it is in range and appears in the Analysis tab.",
+        "Renvoyer le sport à la montre" to "Resend the sport to the watch",
+        "Le GPS de la montre est utilisé : tes vrais déplacements sont enregistrés même si le téléphone est loin. Si ta montre n'a pas de GPS, choisis « GPS téléphone » et garde le téléphone sur toi." to "The watch GPS is used: your real movements are recorded even if the phone is far away. If your watch has no GPS, choose “Phone GPS” and keep the phone on you.",
     )
 
     private val KO: Map<String, String> = mapOf(
@@ -787,6 +798,17 @@ object I18n {
         "Départ" to "출발",
         "Arrivée" to "도착",
         "Présence par zone" to "구역별 체류",
+        "GPS montre" to "워치 GPS",
+        "GPS téléphone" to "휴대폰 GPS",
+        "Tout se fait sur la montre" to "모든 기록은 워치에서",
+        "Montre connectée : %s" to "워치 연결됨: %s",
+        "Montre non connectée pour l'instant" to "워치가 아직 연결되지 않음",
+        "Le sport choisi (%s) est envoyé automatiquement à la montre." to "선택한 스포츠(%s)가 워치로 자동 전송됩니다.",
+        "Sur la montre, ouvre FieldTracker. Place-toi sur chaque coin du terrain et appuie sur OK (4 coins)." to "워치에서 FieldTracker를 열고 경기장의 각 코너에 서서 OK를 누르세요 (코너 4개).",
+        "Appuie sur START sur la montre. Le téléphone peut rester au vestiaire." to "워치에서 START를 누르세요. 휴대폰은 탈의실에 두어도 됩니다.",
+        "Pour finir : appui long sur ■. La séance est envoyée au téléphone dès qu'il est à portée et apparaît dans l'onglet Analyse." to "종료: ■를 길게 누르세요. 휴대폰이 가까워지면 운동이 전송되어 분석 탭에 표시됩니다.",
+        "Renvoyer le sport à la montre" to "워치로 스포츠 다시 보내기",
+        "Le GPS de la montre est utilisé : tes vrais déplacements sont enregistrés même si le téléphone est loin. Si ta montre n'a pas de GPS, choisis « GPS téléphone » et garde le téléphone sur toi." to "워치 GPS를 사용하므로 휴대폰이 멀리 있어도 실제 이동이 기록됩니다. 워치에 GPS가 없다면 “휴대폰 GPS”를 선택하고 휴대폰을 몸에 지니세요.",
     )
 }
 

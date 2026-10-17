@@ -98,36 +98,60 @@ class WatchActivity : ComponentActivity(), SensorEventListener {
     private var lastSent = 0L
     private val hr = mutableIntStateOf(0)
 
-    private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) updateSensor(WatchState.state.value.phase)
+    private val permGranted = mutableIntStateOf(0)
+
+    private val permission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        permGranted.intValue++
+        updateSensor(WatchState.state.value.phase)
+    }
+
+    fun askPermissions() {
+        val l = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.BODY_SENSORS)
+        if (android.os.Build.VERSION.SDK_INT >= 33) l.add(Manifest.permission.POST_NOTIFICATIONS)
+        permission.launch(l.toTypedArray())
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         hrSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_HEART_RATE)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED) {
-            permission.launch(Manifest.permission.BODY_SENSORS)
-        }
+        WatchRecorder.init(this)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED
+        ) askPermissions()
         WatchState.send(this, "/ft/hello")
+        WatchState.loadConfig(this)
 
         setContent {
             val st by WatchState.state.collectAsState()
             val summary by WatchState.summary.collectAsState()
             val connected by WatchState.connected.collectAsState()
-            LaunchedEffect(st.phase) {
-                updateSensor(st.phase)
-                val live = st.phase == "live" || st.phase == "paused" || st.phase == "calib"
-                if (live) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            val cfg by WatchRecorder.config.collectAsState()
+            val rec by WatchRecorder.state.collectAsState()
+            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(Unit) { while (true) { delay(2000); now = System.currentTimeMillis() } }
+            val recording = rec.phase == RecPhase.LIVE || rec.phase == RecPhase.PAUSED
+            // Télécommande seulement si le téléphone est choisi comme source ET joignable
+            val remote = !recording && cfg.source == "phone" && now - st.receivedAt < 10_000
+            LaunchedEffect(st.phase, remote, rec.phase) {
+                updateSensor(if (remote) st.phase else "none")
+                val keep = if (remote) st.phase == "live" || st.phase == "paused" || st.phase == "calib"
+                else rec.phase == RecPhase.CALIB || recording
+                if (keep) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
-            WatchApp(st, summary, connected, hr.intValue) { path, payload -> WatchState.send(this, path, payload) }
+            if (remote) {
+                WatchApp(st, summary, connected, hr.intValue) { path, payload -> WatchState.send(this, path, payload) }
+            } else {
+                StandaloneApp(rec, cfg, permGranted.intValue, ::askPermissions)
+            }
         }
     }
 
     override fun onResume() {
         super.onResume()
         WatchState.send(this, "/ft/hello")
+        WatchState.loadConfig(this)
     }
 
     private fun updateSensor(phase: String) {
@@ -180,7 +204,8 @@ private fun WatchApp(st: PhoneState, summary: Summary?, connected: Boolean, hr: 
         contentAlignment = Alignment.Center,
     ) {
         when {
-            summary != null && st.phase != "live" && st.phase != "paused" -> SummaryView(summary, st.lang)
+            summary != null && st.phase != "live" && st.phase != "paused" ->
+                Box(Modifier.clickable { WatchState.clearSummary() }) { SummaryView(summary, st.lang) }
             !connected && st.receivedAt == 0L -> Message("FieldTracker", WatchText.t("Ouvre l'app sur le téléphone", st.lang))
             st.phase == "none" -> Message("FieldTracker", WatchText.t("Choisis ton sport sur le téléphone", st.lang))
             st.phase == "calib" -> CalibView(st, send)
@@ -265,15 +290,28 @@ private fun LiveView(st: PhoneState, hr: Int, send: (String, String) -> Unit) {
     LaunchedEffect(Unit) { while (true) { delay(500); now = System.currentTimeMillis() } }
     val paused = st.phase == "paused"
     val elapsed = if (paused) st.elapsedMs else st.elapsedMs + (now - st.receivedAt).coerceIn(0, 5000)
+    LivePanel(
+        st.lang, st.inField, elapsed, paused, hr, st.speedKmh, st.distanceM,
+        onMark = { send("/ft/cmd", "mark") },
+        onPause = { send("/ft/cmd", if (paused) "resume" else "pause") },
+        onStop = { send("/ft/cmd", "stop") },
+    )
+}
+
+@Composable
+private fun LivePanel(
+    lang: String, inField: Boolean, elapsed: Long, paused: Boolean, hr: Int, speedKmh: Double, distanceM: Double,
+    onMark: () -> Unit, onPause: () -> Unit, onStop: () -> Unit,
+) {
     var holding by remember { mutableStateOf(false) }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Box(
             Modifier
                 .clip(RoundedCornerShape(50))
-                .background(if (st.inField) Lime.copy(alpha = 0.15f) else Orange.copy(alpha = 0.3f))
+                .background(if (inField) Lime.copy(alpha = 0.15f) else Orange.copy(alpha = 0.3f))
                 .padding(horizontal = 8.dp, vertical = 2.dp)
-        ) { T(if (st.inField) WatchText.t("DANS LE TERRAIN", st.lang) else WatchText.t("HORS TERRAIN", st.lang), 9.sp, if (st.inField) Lime else Orange, mono = true) }
+        ) { T(if (inField) WatchText.t("DANS LE TERRAIN", lang) else WatchText.t("HORS TERRAIN", lang), 9.sp, if (inField) Lime else Orange, mono = true) }
         Spacer(Modifier.height(2.dp))
         T(fmt(elapsed), 30.sp, if (paused) Amber else Lime, mono = true)
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -282,20 +320,18 @@ private fun LiveView(st: PhoneState, hr: Int, send: (String, String) -> Unit) {
                 T("BPM", 9.sp, Muted, mono = true)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                T(String.format("%.1f", st.speedKmh), 20.sp, TextHi, mono = true)
+                T(String.format("%.1f", speedKmh), 20.sp, TextHi, mono = true)
                 T("KM/H", 9.sp, Muted, mono = true)
             }
         }
         T(
-            if (st.distanceM < 1000) String.format("%.0f m", st.distanceM) else String.format("%.2f km", st.distanceM / 1000),
+            if (distanceM < 1000) String.format("%.0f m", distanceM) else String.format("%.2f km", distanceM / 1000),
             12.sp, Muted, mono = true
         )
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            RoundButton("⚑", Surface, TextHi, size = 40) { send("/ft/cmd", "mark") }
-            RoundButton(if (paused) "▶" else "II", if (paused) Lime else Orange, if (paused) Bg else TextHi, size = 48) {
-                send("/ft/cmd", if (paused) "resume" else "pause")
-            }
+            RoundButton("⚑", Surface, TextHi, size = 40) { onMark() }
+            RoundButton(if (paused) "▶" else "II", if (paused) Lime else Orange, if (paused) Bg else TextHi, size = 48) { onPause() }
             Box(
                 Modifier
                     .size(40.dp)
@@ -305,13 +341,13 @@ private fun LiveView(st: PhoneState, hr: Int, send: (String, String) -> Unit) {
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onPress = { holding = true; tryAwaitRelease(); holding = false },
-                            onLongPress = { send("/ft/cmd", "stop") },
+                            onLongPress = { onStop() },
                         )
                     },
                 contentAlignment = Alignment.Center,
             ) { T("■", 14.sp, TextHi) }
         }
-        T(WatchText.t("maintenir ■ pour terminer", st.lang), 8.sp, Muted, modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
+        T(WatchText.t("maintenir ■ pour terminer", lang), 8.sp, Muted, modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
     }
 }
 
@@ -335,4 +371,149 @@ private fun fmt(ms: Long): String {
     val m = (s % 3600) / 60
     val sec = s % 60
     return if (h > 0) String.format("%d:%02d:%02d", h, m, sec) else String.format("%02d:%02d", m, sec)
+}
+
+// ======================================================================
+// Mode autonome : la montre balise et enregistre avec son propre GPS
+// ======================================================================
+
+@Composable
+private fun StandaloneApp(rec: RecState, cfg: WatchConfig, permTick: Int, askPerms: () -> Unit) {
+    val fix by WatchRecorder.fix.collectAsState()
+    val needsGps = rec.phase == RecPhase.CALIB || rec.phase == RecPhase.READY
+    DisposableEffect(needsGps, permTick) {
+        if (needsGps) WatchRecorder.gpsStart("ui")
+        onDispose { WatchRecorder.gpsStop("ui") }
+    }
+    val hasPerm = permTick >= 0 && WatchRecorder.hasLocation()
+    Box(
+        Modifier.fillMaxSize().background(Bg).padding(horizontal = 20.dp, vertical = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            !WatchRecorder.hasGpsHardware() -> Message("FieldTracker", WatchRecorder.t("Cette montre n'a pas de GPS"))
+            cfg.sportId.isEmpty() -> Message("FieldTracker", WatchRecorder.t("Choisis le sport sur le téléphone (une fois)"))
+            !hasPerm -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                T("FieldTracker", 15.sp, Lime)
+                Spacer(Modifier.height(8.dp))
+                RoundButton(WatchRecorder.t("Autoriser GPS + cardio"), Lime, Bg, size = 96) { askPerms() }
+            }
+            rec.phase == RecPhase.CALIB -> SoloCalib(rec, cfg, fix)
+            rec.phase == RecPhase.READY -> SoloReady(rec, cfg, fix)
+            rec.phase == RecPhase.DONE -> SoloDone(rec)
+            else -> {
+                var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(Unit) { while (true) { delay(500); now = System.currentTimeMillis() } }
+                LivePanel(
+                    cfg.lang, rec.inField, if (now > 0) WatchRecorder.elapsed(now) else 0L, rec.phase == RecPhase.PAUSED,
+                    rec.hr, rec.speedKmh, rec.distanceM,
+                    onMark = { WatchRecorder.mark() },
+                    onPause = { if (rec.phase == RecPhase.PAUSED) WatchRecorder.resume() else WatchRecorder.pause() },
+                    onStop = { WatchRecorder.stop() },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GpsLine(fix: GpsFix?) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
+    val fresh = fix != null && now - fix.t < 4000
+    val acc = fix?.acc ?: 99f
+    T(
+        if (fresh) WatchRecorder.t("GPS montre") + " ±${acc.toInt()} m" else WatchRecorder.t("Recherche GPS…"),
+        10.sp, if (fresh && acc <= 10f) Lime else Amber, mono = true,
+    )
+}
+
+@Composable
+private fun MiniField(corner: Int, pulse: Float) {
+    Canvas(Modifier.width(104.dp).height(58.dp)) {
+        val pad = 8f
+        val l = pad; val t = pad; val r = size.width - pad; val b = size.height - pad
+        drawRect(Border, Offset(l, t), androidx.compose.ui.geometry.Size(r - l, b - t), style = Stroke(2f))
+        drawLine(Border, Offset((l + r) / 2, t), Offset((l + r) / 2, b), 2f)
+        val pts = listOf(Offset(l, t), Offset(r, t), Offset(r, b), Offset(l, b))
+        for (i in 0 until 4) if (i < corner && (i + 1) % 4 < corner) drawLine(Lime, pts[i], pts[(i + 1) % 4], 4f)
+        pts.forEachIndexed { i, o ->
+            when {
+                i < corner -> drawCircle(Lime, 7f, o)
+                i == corner -> drawCircle(Lime.copy(alpha = pulse), 9f, o, style = Stroke(3f))
+                else -> drawCircle(Muted, 5f, o, style = Stroke(2f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmallButton(label: String, color: Color = Surface, text: Color = TextHi, onClick: () -> Unit) {
+    Box(
+        Modifier.clip(RoundedCornerShape(50)).background(color).border(1.dp, Border, RoundedCornerShape(50))
+            .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) { T(label, 10.sp, text) }
+}
+
+@Composable
+private fun SoloCalib(rec: RecState, cfg: WatchConfig, fix: GpsFix?) {
+    val anim = rememberInfiniteTransition(label = "c")
+    val pulse by anim.animateFloat(0.2f, 1f, infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse), label = "p")
+    val saved = remember(cfg.sportId, rec.corner) { WatchRecorder.savedCalibration() }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        T(cfg.sportName, 11.sp, Muted)
+        MiniField(rec.corner, pulse)
+        T(String.format(WatchRecorder.t("COIN %d/4"), (rec.corner + 1).coerceAtMost(4)), 13.sp, TextHi, mono = true)
+        GpsLine(fix)
+        Spacer(Modifier.height(4.dp))
+        val prog = rec.capturing
+        if (prog != null) {
+            T(WatchRecorder.t("Mesure… reste immobile") + " ${(prog * 100).toInt()}%", 11.sp, Lime)
+        } else {
+            RoundButton("OK", Lime, Bg, size = 56) { WatchRecorder.captureCorner() }
+        }
+        if (rec.message.isNotEmpty() && prog == null) T(rec.message, 9.sp, Amber)
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (rec.corner > 0) SmallButton(WatchRecorder.t("Annuler")) { WatchRecorder.undoCorner() }
+            else if (saved != null) SmallButton(WatchRecorder.t("Réutiliser"), text = Lime) { WatchRecorder.reuseCalibration() }
+        }
+    }
+}
+
+@Composable
+private fun SoloReady(rec: RecState, cfg: WatchConfig, fix: GpsFix?) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        T(cfg.sportName, 11.sp, Muted)
+        T(WatchRecorder.t("Terrain balisé"), 14.sp, Lime)
+        T(String.format("%.0f × %.0f m", rec.fieldL, rec.fieldW), 11.sp, TextHi, mono = true)
+        GpsLine(fix)
+        Spacer(Modifier.height(6.dp))
+        RoundButton(WatchRecorder.t("START"), Lime, Bg, size = 72) { WatchRecorder.start() }
+        Spacer(Modifier.height(6.dp))
+        SmallButton(WatchRecorder.t("Refaire")) { WatchRecorder.resetCalibration() }
+    }
+}
+
+@Composable
+private fun SoloDone(rec: RecState) {
+    // Retour automatique à l'écran de départ après 30 s
+    LaunchedEffect(Unit) { delay(30_000); WatchRecorder.newSession() }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        T(WatchRecorder.t("Séance terminée"), 13.sp, Lime)
+        Spacer(Modifier.height(4.dp))
+        T(rec.lastSummary, 11.sp, TextHi, mono = true)
+        T(String.format(WatchRecorder.t("%d sprints"), rec.sprints), 11.sp, Orange, mono = true)
+        Spacer(Modifier.height(4.dp))
+        T(
+            when (rec.sync) {
+                "sent" -> WatchRecorder.t("Envoyé au téléphone ✓")
+                "pending" -> WatchRecorder.t("En attente du téléphone")
+                else -> ""
+            }, 10.sp, if (rec.sync == "sent") Lime else Amber,
+        )
+        Spacer(Modifier.height(6.dp))
+        RoundButton(WatchRecorder.t("Nouvelle séance"), Lime, Bg, size = 72) { WatchRecorder.newSession() }
+    }
 }

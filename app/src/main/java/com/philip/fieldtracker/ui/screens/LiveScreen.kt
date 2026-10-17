@@ -99,6 +99,11 @@ fun LiveScreen(onGoCalib: () -> Unit) {
     val hrSource by HeartRateHub.source.collectAsState()
     val keepOn by AppState.keepScreenOn.collectAsState()
 
+    val posMode by AppState.positionMode.collectAsState()
+    if (live.phase == Phase.IDLE && posMode == "watch" && sport != null) {
+        WatchModePanel(sport!!)
+        return
+    }
     if (live.phase == Phase.IDLE) {
         val s = sport
         val cal = calibration

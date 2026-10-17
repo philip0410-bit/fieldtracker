@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.philip.fieldtracker.data.AppState
 import com.philip.fieldtracker.data.Geo
 import com.philip.fieldtracker.tracking.Calibrator
@@ -96,6 +97,10 @@ fun CalibrationScreen(onGoSetup: () -> Unit, onStarted: () -> Unit) {
     val mode by AppState.positionMode.collectAsState()
     if (mode == "pdr") {
         PdrCalibration(s, onStarted)
+        return
+    }
+    if (mode == "watch") {
+        WatchModePanel(s)
         return
     }
 
@@ -364,8 +369,63 @@ fun PositionModeSelector() {
     Label(tr("Mode de positionnement"), style = Type.caption)
     Spacer(Modifier.height(6.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Chip(tr("GPS (précis)"), mode == "gps") { AppState.setPositionMode("gps"); Calibrator.reset() }
-        Chip(tr("Sans GPS (expérimental)"), mode == "pdr") { AppState.setPositionMode("pdr"); Calibrator.reset() }
+        Chip(tr("GPS montre"), mode == "watch") { AppState.setPositionMode("watch"); Calibrator.reset() }
+        Chip(tr("GPS téléphone"), mode == "gps") { AppState.setPositionMode("gps"); Calibrator.reset() }
+    }
+    Spacer(Modifier.height(6.dp))
+    Chip(tr("Sans GPS (expérimental)"), mode == "pdr") { AppState.setPositionMode("pdr"); Calibrator.reset() }
+}
+
+/** Mode montre : balisage et enregistrement se font sur la montre, sans le téléphone. */
+@Composable
+fun WatchModePanel(s: Sport) {
+    val p = LocalPalette.current
+    val nodes by WatchLink.nodes.collectAsState()
+    LaunchedEffect(s.id) { WatchLink.refresh(); WatchLink.pushConfig() }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        PositionModeSelector()
+        Spacer(Modifier.height(12.dp))
+        Panel(accent = p.primary.copy(alpha = 0.6f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconSquare(Icons.Filled.Watch, if (nodes.isNotEmpty()) p.primary else p.muted)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(tr("Tout se fait sur la montre"), style = Type.bodyBold, color = p.text)
+                    Label(
+                        if (nodes.isNotEmpty()) trf("Montre connectée : %s", nodes.first().name) else tr("Montre non connectée pour l'instant"),
+                        color = if (nodes.isNotEmpty()) p.primary else p.muted, style = Type.caption,
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            val steps = listOf(
+                trf("Le sport choisi (%s) est envoyé automatiquement à la montre.", tr(s.name)),
+                tr("Sur la montre, ouvre FieldTracker. Place-toi sur chaque coin du terrain et appuie sur OK (4 coins)."),
+                tr("Appuie sur START sur la montre. Le téléphone peut rester au vestiaire."),
+                tr("Pour finir : appui long sur ■. La séance est envoyée au téléphone dès qu'il est à portée et apparaît dans l'onglet Analyse."),
+            )
+            steps.forEachIndexed { i, t ->
+                Row(Modifier.padding(vertical = 5.dp)) {
+                    Text("${i + 1}", style = Type.metric.copy(fontSize = 18.sp), color = p.primary, modifier = Modifier.width(26.dp))
+                    Text(t, style = Type.body, color = p.text, modifier = Modifier.weight(1f))
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            GhostButton(tr("Renvoyer le sport à la montre"), Modifier.fillMaxWidth(), Icons.Filled.Refresh) {
+                WatchLink.refresh(); WatchLink.pushConfig()
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            tr("Le GPS de la montre est utilisé : tes vrais déplacements sont enregistrés même si le téléphone est loin. Si ta montre n'a pas de GPS, choisis « GPS téléphone » et garde le téléphone sur toi."),
+            style = Type.caption, color = p.muted,
+        )
+        Spacer(Modifier.height(24.dp))
     }
 }
 
