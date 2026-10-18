@@ -192,6 +192,23 @@ fun LiveScreen(onGoCalib: () -> Unit) {
             }
             Spacer(Modifier.height(12.dp))
 
+            // Score : appui = +1, appui long = annuler le dernier but
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(Shape12)
+                    .background(p.surface)
+                    .border(1.dp, p.border, Shape12)
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ScoreBtn(tr("Nous") + " +1", p.primary, p.onPrimary, Modifier.weight(1f), { Tracker.goal(0) }, { Tracker.undoGoal(0) })
+                Text("${live.scoreUs} – ${live.scoreThem}", style = Type.metricXl, color = p.text, modifier = Modifier.padding(horizontal = 14.dp))
+                ScoreBtn(tr("Eux") + " +1", p.secondary, Color.White, Modifier.weight(1f), { Tracker.goal(1) }, { Tracker.undoGoal(1) })
+            }
+            Text(tr("Appui long pour annuler le dernier but"), style = Type.caption, color = p.muted, modifier = Modifier.padding(top = 4.dp))
+            Spacer(Modifier.height(12.dp))
+
             // Statut terrain
             Row(
                 Modifier
@@ -353,4 +370,17 @@ private fun ControlButton(text: String, icon: ImageVector, bg: Color, fg: Color,
         Spacer(Modifier.height(6.dp))
         Text(text.uppercase(), style = Type.label, color = fg, textAlign = TextAlign.Center)
     }
+}
+
+
+@Composable
+private fun ScoreBtn(label: String, bg: Color, fg: Color, modifier: Modifier, onTap: () -> Unit, onLong: () -> Unit) {
+    Box(
+        modifier
+            .height(56.dp)
+            .clip(Shape12)
+            .background(bg)
+            .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }, onLongPress = { onLong() }) },
+        contentAlignment = Alignment.Center,
+    ) { Text(label.uppercase(), style = Type.h2, color = fg) }
 }

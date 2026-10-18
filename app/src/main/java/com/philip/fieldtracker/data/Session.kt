@@ -33,8 +33,30 @@ data class Session(
     /** "gps", "import:<fichier>"… */
     val source: String,
     val title: String = "",
+    /** Poste joué (voir [Positions]). */
+    val positionId: String = "",
+    /** Buts marqués pendant la séance. */
+    val goals: List<Goal> = emptyList(),
+    /** Mon équipe attaque vers le coin 1 (et non vers le coin 2) en 1re mi-temps. */
+    val attackFlip: Boolean = false,
+    /** Changement de côté à la mi-temps. */
+    val halfSwitch: Boolean = false,
 ) {
     val sport: Sport get() = Sports.byId(sportId) ?: Sports.all.last()
+
+    val position: PlayPosition? get() = Positions.find(sportId, positionId)
+
+    /** Instant de la mi-temps : milieu du temps de jeu enregistré. */
+    val halfTimeT: Long by lazy { if (points.isEmpty()) startMs else points[points.size / 2].t }
+
+    /**
+     * Coordonnées dans le sens d'attaque de mon équipe :
+     * u = 0 ma ligne de but → 1 ligne adverse ; v = 0 gauche → 1 droite.
+     */
+    fun attackUV(t: Long, u: Double, v: Double): DoubleArray {
+        val flip = attackFlip xor (halfSwitch && t >= halfTimeT)
+        return if (flip) doubleArrayOf(1 - u, 1 - v) else doubleArrayOf(u, v)
+    }
 
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("sportId", sportId); put("start", startMs); put("end", endMs)
@@ -48,6 +70,8 @@ data class Session(
         })
         put("hr", JSONArray().apply { hrSamples.forEach { put(JSONArray().put(it.first).put(it.second)) } })
         put("highlights", JSONArray().apply { highlights.forEach { put(JSONArray().put(it.t).put(it.label)) } })
+        put("position", positionId); put("attackFlip", attackFlip); put("halfSwitch", halfSwitch)
+        put("goals", JSONArray().apply { goals.forEach { put(JSONArray().put(it.t).put(it.team)) } })
     }
 
     companion object {
@@ -82,6 +106,12 @@ data class Session(
                 highlights = hl,
                 source = o.optString("source", "gps"),
                 title = o.optString("title", ""),
+                positionId = o.optString("position", ""),
+                goals = (o.optJSONArray("goals") ?: JSONArray()).let { g ->
+                    (0 until g.length()).map { val a = g.getJSONArray(it); Goal(a.getLong(0), a.getInt(1)) }
+                },
+                attackFlip = o.optBoolean("attackFlip", false),
+                halfSwitch = o.optBoolean("halfSwitch", false),
             )
         }
     }

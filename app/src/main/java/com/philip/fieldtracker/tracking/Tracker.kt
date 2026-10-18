@@ -40,6 +40,8 @@ data class LiveState(
     val trail: List<Pair<Float, Float>> = emptyList(),
     val lastHighlight: Highlight? = null,
     val accuracy: Float = 0f,
+    val scoreUs: Int = 0,
+    val scoreThem: Int = 0,
 )
 
 /** Enregistrement d'une séance en direct. */
@@ -51,6 +53,7 @@ object Tracker {
     private val points = ArrayList<TrackPoint>()
     private val hrSamples = ArrayList<Pair<Long, Int>>()
     private val highlights = ArrayList<Highlight>()
+    private val goals = ArrayList<com.philip.fieldtracker.data.Goal>()
     private val trail = ArrayDeque<Pair<Float, Float>>()
 
     private var startMs = 0L
@@ -83,7 +86,7 @@ object Tracker {
     fun start(sport: Sport, cal: Calibration) {
         if (isActive) return
         calibration = cal
-        points.clear(); hrSamples.clear(); highlights.clear(); trail.clear()
+        points.clear(); hrSamples.clear(); highlights.clear(); trail.clear(); goals.clear()
         startMs = System.currentTimeMillis()
         pausedTotal = 0; pauseStart = 0; smoothSpeed = 0.0; prevSpeed = 0.0
         buffer.clear(); lastSmoothed = null; rejected = 0
@@ -116,6 +119,29 @@ object Tracker {
         highlights.add(h)
         _live.value = _live.value.copy(lastHighlight = h)
         WatchLink.pushState()
+    }
+
+    /** But : team 0 = mon équipe, 1 = adversaire. */
+    @Synchronized
+    fun goal(team: Int) {
+        if (!isActive) return
+        goals.add(com.philip.fieldtracker.data.Goal(System.currentTimeMillis(), team))
+        updateScore()
+        Haptics.vibrate(AppState.appContext, Haptics.SHORT)
+    }
+
+    /** Annule le dernier but de l'équipe. */
+    @Synchronized
+    fun undoGoal(team: Int) {
+        val i = goals.indexOfLast { it.team == team }
+        if (i >= 0) goals.removeAt(i)
+        updateScore()
+        Haptics.vibrate(AppState.appContext, Haptics.DOUBLE)
+    }
+
+    private fun updateScore() {
+        _live.value = _live.value.copy(scoreUs = goals.count { it.team == 0 }, scoreThem = goals.count { it.team == 1 })
+        WatchLink.pushState(force = true)
     }
 
     @Synchronized
@@ -260,6 +286,8 @@ object Tracker {
             hrSamples = hrSamples.toList(),
             highlights = highlights.toList(),
             source = "gps",
+            positionId = AppState.position.value,
+            goals = goals.toList(),
         )
         val stats = StatsCalculator.compute(session, AppState.profile.value)
         SessionStore.save(ctx, session, stats)

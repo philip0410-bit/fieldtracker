@@ -108,6 +108,11 @@ object WatchLink {
                     dataMap.putDouble("marginLM", sport.marginLM)
                     dataMap.putDouble("marginWM", sport.marginWM)
                     dataMap.putDouble("sprintKmh", sport.sprintKmh)
+                    val pos = com.philip.fieldtracker.data.Positions.find(sport.id, AppState.position.value)
+                    dataMap.putString("positionId", pos?.id ?: "")
+                    dataMap.putString("positionName", pos?.let { tr(it.name) } ?: "")
+                    dataMap.putString("us", tr("Nous"))
+                    dataMap.putString("them", tr("Eux"))
                     dataMap.putString("lang", com.philip.fieldtracker.i18n.I18n.lang)
                     dataMap.putString("source", if (AppState.positionMode.value == "watch") "watch" else "phone")
                     dataMap.putLong("ts", System.currentTimeMillis())
@@ -152,6 +157,10 @@ object WatchLink {
             hrSamples = hr,
             highlights = (0 until ma.length()).map { Highlight(ma.getLong(it), tr("Temps fort (montre)")) },
             source = "watch",
+            positionId = json.optString("position", ""),
+            goals = (json.optJSONArray("goals") ?: org.json.JSONArray()).let { g ->
+                (0 until g.length()).map { val a = g.getJSONArray(it); com.philip.fieldtracker.data.Goal(a.getLong(0), a.getInt(1)) }
+            },
         )
         val ctx = AppState.appContext
         SessionStore.save(ctx, session, StatsCalculator.compute(session, AppState.profile.value))
@@ -202,6 +211,7 @@ object WatchLink {
             put("zone", live.zoneLabel)
             put("kcal", live.kcal)
             put("sprints", live.sprints)
+            put("us", live.scoreUs); put("them", live.scoreThem)
         }
     }
 
@@ -233,6 +243,10 @@ object WatchLink {
                 "pause" -> Tracker.pause()
                 "resume" -> Tracker.resume()
                 "mark" -> Tracker.mark(tr("Temps fort (montre)"))
+                "goalA" -> Tracker.goal(0)
+                "goalB" -> Tracker.goal(1)
+                "undoA" -> Tracker.undoGoal(0)
+                "undoB" -> Tracker.undoGoal(1)
                 "stop" -> try { TrackingService.stop(ctx) } catch (_: Exception) { Tracker.stop(ctx) }
             }
             PATH_HELLO -> { refresh(); pushConfig() }

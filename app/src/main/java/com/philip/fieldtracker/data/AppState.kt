@@ -28,6 +28,10 @@ object AppState {
     private val _positionMode = MutableStateFlow("watch")
     val positionMode: StateFlow<String> = _positionMode
 
+    /** Poste joué pour le sport courant (vide = non précisé). */
+    private val _position = MutableStateFlow("")
+    val position: StateFlow<String> = _position
+
     private val _keepScreenOn = MutableStateFlow(true)
     val keepScreenOn: StateFlow<Boolean> = _keepScreenOn
 
@@ -57,9 +61,17 @@ object AppState {
             hrMaxOverride = prefs.getInt("hrMax", 0),
         )
         _selectedSessionId.value = prefs.getString("lastSession", null)
+        _position.value = _sport.value?.let { prefs.getString("pos_" + it.id, "") } ?: ""
         val device = java.util.Locale.getDefault().language
         val defLang = if (device == "ko" || device == "en") device else "fr"
         com.philip.fieldtracker.i18n.I18n.setLang(prefs.getString("lang", defLang) ?: defLang)
+    }
+
+    fun setPosition(id: String) {
+        val s = _sport.value ?: return
+        _position.value = id
+        prefs.edit().putString("pos_" + s.id, id).apply()
+        com.philip.fieldtracker.watch.WatchLink.pushConfig()
     }
 
     fun setPositionMode(m: String) {
@@ -78,6 +90,7 @@ object AppState {
     fun selectSport(s: Sport) {
         _sport.value = s
         prefs.edit().putString("sport", s.id).apply()
+        _position.value = prefs.getString("pos_" + s.id, "") ?: ""
         com.philip.fieldtracker.watch.WatchLink.pushConfig()
     }
 

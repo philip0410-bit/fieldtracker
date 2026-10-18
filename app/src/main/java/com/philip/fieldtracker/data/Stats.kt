@@ -142,8 +142,10 @@ object StatsCalculator {
             if (a.inField) {
                 inFieldMs += dt
                 distIn += segD
-                val zi = (a.u.coerceIn(0.0, 0.999) * 3).toInt()
-                val zj = (a.v.coerceIn(0.0, 0.999) * 3).toInt()
+                // Zones dans le sens d'attaque de mon équipe (Défense → Attaque)
+                val au = s.attackUV(a.t, a.u, a.v)
+                val zi = (au[0].coerceIn(0.0, 0.999) * 3).toInt()
+                val zj = (au[1].coerceIn(0.0, 0.999) * 3).toInt()
                 zones[zi][zj] += dt.toDouble()
             }
             // Carte de chaleur : terrain + zone de jeu autour (tennis, volley…)

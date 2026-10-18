@@ -38,6 +38,8 @@ data class PhoneState(
     val kcal: Double = 0.0,
     val sprints: Int = 0,
     val lang: String = "fr",
+    val us: Int = 0,
+    val them: Int = 0,
 )
 
 data class Summary(val distM: Double, val vmax: Double, val sprints: Int, val activeMs: Long, val at: Long)
@@ -76,6 +78,8 @@ object WatchState {
                     kcal = o.optDouble("kcal", 0.0),
                     sprints = o.optInt("sprints", 0),
                     lang = o.optString("lang", prev.lang),
+                    us = o.optInt("us", 0),
+                    them = o.optInt("them", 0),
                 )
                 // Coin validé -> double vibration au poignet
                 if (next.phase == prev.phase && next.corner > prev.corner) vibrate(ctx, longArrayOf(0, 80, 90, 80))
@@ -117,6 +121,10 @@ object WatchState {
         sprintKmh = m.getDouble("sprintKmh", 25.2),
         lang = m.getString("lang", "fr"),
         source = m.getString("source", "watch"),
+        positionId = m.getString("positionId", ""),
+        positionName = m.getString("positionName", ""),
+        usLabel = m.getString("us", "Nous"),
+        themLabel = m.getString("them", "Eux"),
     )
 
     /** Lit la dernière config envoyée par le téléphone (même si l'app montre était fermée). */

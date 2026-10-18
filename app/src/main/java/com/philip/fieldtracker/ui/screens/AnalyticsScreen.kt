@@ -76,6 +76,7 @@ import com.philip.fieldtracker.health.HealthLink
 import com.philip.fieldtracker.ui.components.Bar
 import com.philip.fieldtracker.ui.components.Chip
 import com.philip.fieldtracker.ui.components.FieldCanvas
+import com.philip.fieldtracker.ui.components.Dot
 import com.philip.fieldtracker.ui.components.GhostButton
 import com.philip.fieldtracker.ui.components.IconSquare
 import com.philip.fieldtracker.ui.components.KeyValue
@@ -146,6 +147,7 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
     val scope = rememberCoroutineScope()
     val sport = s.sport
     var heatMode by remember(s.id) { mutableStateOf(0) }
+    val match = remember(s, st) { com.philip.fieldtracker.data.MatchAnalysis.compute(s, st) }
     var confirmDelete by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -287,6 +289,31 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                         drawPath(path, p.primary.copy(alpha = 0.7f), style = Stroke(2.5f))
                     }
                 }
+                // Repères 1re mi-temps : sens d'attaque, zone du poste, position moyenne
+                fun rx(u: Double) = r.left + (if (s.attackFlip) 1 - u else u).toFloat() * r.width
+                fun ry(v: Double) = r.top + (if (s.attackFlip) 1 - v else v).toFloat() * r.height
+                val pos = s.position
+                if (pos != null && !s.halfSwitch) {
+                    val x1 = rx(pos.uMin); val x2 = rx(pos.uMax); val y1 = ry(pos.vMin); val y2 = ry(pos.vMax)
+                    drawRect(
+                        Color.White.copy(alpha = 0.85f), Offset(minOf(x1, x2), minOf(y1, y2)),
+                        Size(kotlin.math.abs(x2 - x1), kotlin.math.abs(y2 - y1)),
+                        style = Stroke(3f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(12f, 8f))),
+                    )
+                }
+                if (!s.halfSwitch && match.avgU > 0) {
+                    val c = Offset(rx(match.avgU), ry(match.avgV))
+                    drawCircle(Color.White, 13f, c)
+                    drawCircle(p.bg, 8f, c)
+                }
+                // Flèche du sens d'attaque
+                val ay = r.top - 10f
+                val ax1 = r.left + r.width * 0.35f; val ax2 = r.left + r.width * 0.65f
+                val (from, to) = if (s.attackFlip) ax2 to ax1 else ax1 to ax2
+                drawLine(p.primary, Offset(from, ay), Offset(to, ay), 4f)
+                val dir = if (to > from) -1f else 1f
+                drawLine(p.primary, Offset(to, ay), Offset(to + dir * 14f, ay - 8f), 4f)
+                drawLine(p.primary, Offset(to, ay), Offset(to + dir * 14f, ay + 8f), 4f)
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -305,6 +332,10 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                 Label(tr("Point chaud"), style = Type.caption)
             }
         }
+        Spacer(Modifier.height(16.dp))
+
+        // Poste, sens d'attaque et score
+        MatchPanels(s, st, match)
         Spacer(Modifier.height(16.dp))
 
         // Présence
@@ -704,4 +735,140 @@ private fun ExportDialog(s: Session, st: SessionStats, onClose: () -> Unit) {
             }
         },
     )
+}
+
+
+/** Met à jour une séance (poste, sens d'attaque…) et recalcule ses statistiques. */
+private fun updateSession(ctx: android.content.Context, ns: Session) {
+    SessionStore.save(ctx, ns, StatsCalculator.compute(ns, AppState.profile.value))
+    AppState.historyChanged()
+}
+
+@Composable
+private fun MatchPanels(s: Session, st: SessionStats, m: com.philip.fieldtracker.data.MatchStats) {
+    val p = LocalPalette.current
+    val ctx = LocalContext.current
+    val positions = com.philip.fieldtracker.data.Positions.forSport(s.sportId)
+
+    // ---- Réglages : poste + sens d'attaque
+    Panel {
+        Text(tr("Poste & sens du jeu"), style = Type.h2, color = p.text)
+        if (positions.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Label(tr("Ton poste"), style = Type.caption)
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Chip(tr("Non précisé"), s.positionId.isEmpty()) { updateSession(ctx, s.copy(positionId = "")) }
+                positions.forEach { pos -> Chip(tr(pos.name), s.positionId == pos.id) { updateSession(ctx, s.copy(positionId = pos.id)) } }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Label(tr("Sens d'attaque de mon équipe (1re mi-temps)"), style = Type.caption)
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip(tr("Vers la droite →"), !s.attackFlip) { if (s.attackFlip) updateSession(ctx, s.copy(attackFlip = false)) }
+            Chip(tr("← Vers la gauche"), s.attackFlip) { if (!s.attackFlip) updateSession(ctx, s.copy(attackFlip = true)) }
+        }
+        ToggleRow(
+            tr("Changement de côté à la mi-temps"), tr("Le sens d'attaque s'inverse au milieu du temps de jeu"),
+            s.halfSwitch,
+        ) { updateSession(ctx, s.copy(halfSwitch = it)) }
+    }
+
+    // ---- Analyse de poste
+    val ps = m.position
+    if (ps != null) {
+        Spacer(Modifier.height(16.dp))
+        Panel {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(tr("Analyse de poste"), style = Type.h2, color = p.text, modifier = Modifier.weight(1f))
+                Pill(tr(ps.position.name), p.primary, filled = true)
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MetricCard(
+                    tr("Dans la zone du poste"), "${(ps.inZone * 100).toInt()}", "%", Modifier.weight(1f),
+                    color = if (ps.inZone >= 0.6) p.primary else if (ps.inZone >= 0.4) p.warning else p.secondary,
+                    footer = tr("Rectangle pointillé sur la carte"),
+                )
+                MetricCard(
+                    tr("Position moyenne"), "${(ps.avgU * 100).toInt()}", "%", Modifier.weight(1f),
+                    footer = tr("0 % = ta ligne de but, 100 % = ligne adverse"),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Label(tr("Répartition gauche / axe / droite"), style = Type.caption)
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.fillMaxWidth().height(10.dp).clip(Shape8)) {
+                listOf(ps.left to p.tertiary, ps.axis to p.primary, ps.right to p.warning).forEach { (f, c) ->
+                    if (f > 0.001) Box(Modifier.weight(f.toFloat()).height(10.dp).background(c))
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                Text(trf("Gauche %d%%", (ps.left * 100).toInt()), style = Type.caption, color = p.tertiary, modifier = Modifier.weight(1f))
+                Text(trf("Axe %d%%", (ps.axis * 100).toInt()), style = Type.caption, color = p.primary, modifier = Modifier.weight(1f))
+                Text(trf("Droite %d%%", (ps.right * 100).toInt()), style = Type.caption, color = p.warning)
+            }
+            ps.position.refMPerMin?.let { ref ->
+                Spacer(Modifier.height(10.dp))
+                KeyValue(tr("Intensité (m/min)"), String.format("%.0f", ps.mPerMin))
+                KeyValue(tr("Référence haut niveau pour ce poste"), String.format("%.0f", ref), p.muted)
+                Bar((ps.mPerMin / ref).toFloat(), if (ps.mPerMin >= ref * 0.85) p.primary else p.warning)
+            }
+            if (s.halfSwitch) {
+                Spacer(Modifier.height(6.dp))
+                Text(tr("Avec le changement de côté, la zone et la position moyenne ne sont pas dessinées sur la carte."), style = Type.caption, color = p.muted)
+            }
+        }
+    }
+
+    // ---- Score et états du match
+    Spacer(Modifier.height(16.dp))
+    Panel {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tr("Score"), style = Type.h2, color = p.text, modifier = Modifier.weight(1f))
+            Text("${m.scoreUs} – ${m.scoreThem}", style = Type.metric, color = p.text)
+        }
+        if (m.goals.isEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text(tr("Aucun but enregistré. Pendant la séance, utilise les boutons +1 (montre ou téléphone)."), style = Type.caption, color = p.muted)
+        } else {
+            Spacer(Modifier.height(6.dp))
+            m.goals.forEach { g ->
+                Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${g.minute}'", style = Type.label, color = p.muted, modifier = Modifier.width(42.dp))
+                    Dot(if (g.team == 0) p.primary else p.secondary)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (g.team == 0) tr("But pour nous") else tr("But adverse"), style = Type.body, color = p.text, modifier = Modifier.weight(1f))
+                    Text("${g.us} – ${g.them}", style = Type.label, color = p.text)
+                }
+            }
+        }
+        if (m.states.size > 1 || m.goals.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Label(tr("Selon le score"), style = Type.caption)
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth()) {
+                Text("", modifier = Modifier.weight(1.3f))
+                listOf(tr("Temps"), "m/min", tr("Pos. moy."), tr("Tiers off.")).forEach {
+                    Text(it, style = Type.caption, color = p.muted, modifier = Modifier.weight(1f))
+                }
+            }
+            m.states.forEach { x ->
+                val (label, col) = when (x.state) {
+                    1 -> tr("Je mène") to p.primary
+                    0 -> tr("Égalité") to p.text
+                    else -> tr("Je suis mené") to p.secondary
+                }
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, style = Type.bodyBold, color = col, modifier = Modifier.weight(1.3f))
+                    Text(formatDuration(x.timeMs), style = Type.label, color = p.text, modifier = Modifier.weight(1f))
+                    Text(String.format("%.0f", x.mPerMin), style = Type.label, color = p.text, modifier = Modifier.weight(1f))
+                    Text("${(x.avgU * 100).toInt()}%", style = Type.label, color = p.text, modifier = Modifier.weight(1f))
+                    Text("${(x.offThird * 100).toInt()}%", style = Type.label, color = p.text, modifier = Modifier.weight(1f))
+                }
+            }
+            Text(tr("Pos. moy. : 0 % = ta ligne de but, 100 % = ligne adverse. Tiers off. : temps passé dans le tiers adverse."), style = Type.caption, color = p.muted)
+        }
+    }
 }

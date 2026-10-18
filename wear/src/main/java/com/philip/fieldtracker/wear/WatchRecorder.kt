@@ -47,6 +47,10 @@ data class WatchConfig(
     val lang: String = "fr",
     /** "watch" : la montre enregistre seule ; "phone" : télécommande du téléphone. */
     val source: String = "watch",
+    val positionId: String = "",
+    val positionName: String = "",
+    val usLabel: String = "Nous",
+    val themLabel: String = "Eux",
 )
 
 enum class RecPhase { CALIB, READY, LIVE, PAUSED, DONE }
@@ -69,6 +73,8 @@ data class RecState(
     /** Envoi de la dernière séance : "", "pending", "sent". */
     val sync: String = "",
     val lastSummary: String = "",
+    val scoreUs: Int = 0,
+    val scoreThem: Int = 0,
 )
 
 data class GpsFix(val t: Long, val lat: Double, val lon: Double, val acc: Float, val speed: Float)
@@ -105,6 +111,7 @@ object WatchRecorder : SensorEventListener {
     private val fixes = ArrayList<GpsFix>()
     private val hrSamples = ArrayList<Pair<Long, Int>>()
     private val marks = ArrayList<Long>()
+    private val goals = ArrayList<Pair<Long, Int>>()
     private var lastLive: GpsFix? = null
     private var smooth = 0.0
     private var inSprint = false
@@ -124,6 +131,10 @@ object WatchRecorder : SensorEventListener {
             sprintKmh = prefs.getFloat("sprintKmh", 25.2f).toDouble(),
             lang = prefs.getString("lang", "fr") ?: "fr",
             source = prefs.getString("source", "watch") ?: "watch",
+            positionId = prefs.getString("positionId", "") ?: "",
+            positionName = prefs.getString("positionName", "") ?: "",
+            usLabel = prefs.getString("usLabel", "Nous") ?: "Nous",
+            themLabel = prefs.getString("themLabel", "Eux") ?: "Eux",
         )
         _state.value = _state.value.copy(sync = if (pendingDir().listFiles()?.isNotEmpty() == true) "pending" else "")
     }
@@ -140,6 +151,8 @@ object WatchRecorder : SensorEventListener {
             .putFloat("lengthM", c.lengthM.toFloat()).putFloat("widthM", c.widthM.toFloat())
             .putFloat("marginLM", c.marginLM.toFloat()).putFloat("marginWM", c.marginWM.toFloat())
             .putFloat("sprintKmh", c.sprintKmh.toFloat()).putString("lang", c.lang).putString("source", c.source)
+            .putString("positionId", c.positionId).putString("positionName", c.positionName)
+            .putString("usLabel", c.usLabel).putString("themLabel", c.themLabel)
             .apply()
         val ph = _state.value.phase
         if (changedSport && (ph == RecPhase.CALIB || ph == RecPhase.READY)) resetCalibration()
@@ -288,10 +301,11 @@ object WatchRecorder : SensorEventListener {
         sessionId = UUID.randomUUID().toString()
         startMs = System.currentTimeMillis()
         pausedTotal = 0; pauseStart = 0
-        fixes.clear(); hrSamples.clear(); marks.clear()
+        fixes.clear(); hrSamples.clear(); marks.clear(); goals.clear()
         lastLive = null; smooth = 0.0; inSprint = false
         _state.value = _state.value.copy(
             phase = RecPhase.LIVE, distanceM = 0.0, speedKmh = 0.0, maxSpeedKmh = 0.0, sprints = 0, hr = 0,
+            scoreUs = 0, scoreThem = 0,
         )
         WatchTrackingService.start(app)
         autosave()
@@ -314,6 +328,27 @@ object WatchRecorder : SensorEventListener {
         if (_state.value.phase == RecPhase.LIVE) { marks.add(System.currentTimeMillis()); vibrate(longArrayOf(0, 60)) }
     }
 
+    /** But : team 0 = mon équipe, 1 = adversaire. */
+    fun goal(team: Int) {
+        val ph = _state.value.phase
+        if (ph != RecPhase.LIVE && ph != RecPhase.PAUSED) return
+        goals.add(System.currentTimeMillis() to team)
+        updateScore()
+        vibrate(longArrayOf(0, 70))
+    }
+
+    fun undoGoal(team: Int) {
+        val i = goals.indexOfLast { it.second == team }
+        if (i < 0) return
+        goals.removeAt(i)
+        updateScore()
+        vibrate(longArrayOf(0, 70, 80, 70))
+    }
+
+    private fun updateScore() {
+        _state.value = _state.value.copy(scoreUs = goals.count { it.second == 0 }, scoreThem = goals.count { it.second == 1 })
+    }
+
     fun stop() {
         val ph = _state.value.phase
         if (ph != RecPhase.LIVE && ph != RecPhase.PAUSED) return
@@ -323,8 +358,9 @@ object WatchRecorder : SensorEventListener {
         val st = _state.value
         val f = field
         WatchTrackingService.stop(app)
+        val score = if (goals.isNotEmpty()) "  ${st.scoreUs}–${st.scoreThem}" else ""
         val summary = String.format(
-            "%s · %s · Vmax %.1f km/h", fmtDur(active),
+            "%s · %s · Vmax %.1f km/h$score", fmtDur(active),
             if (st.distanceM < 1000) String.format("%.0f m", st.distanceM) else String.format("%.2f km", st.distanceM / 1000),
             st.maxSpeedKmh,
         )
@@ -345,7 +381,7 @@ object WatchRecorder : SensorEventListener {
     fun newSession() {
         _state.value = _state.value.copy(
             phase = if (field != null) RecPhase.READY else RecPhase.CALIB,
-            distanceM = 0.0, speedKmh = 0.0, maxSpeedKmh = 0.0, sprints = 0,
+            distanceM = 0.0, speedKmh = 0.0, maxSpeedKmh = 0.0, sprints = 0, scoreUs = 0, scoreThem = 0,
         )
     }
 
@@ -430,6 +466,8 @@ object WatchRecorder : SensorEventListener {
         })
         put("hr", JSONArray().apply { hrSamples.forEach { put(JSONArray().put(it.first).put(it.second)) } })
         put("marks", JSONArray().apply { marks.forEach { put(it) } })
+        put("position", c.positionId)
+        put("goals", JSONArray().apply { goals.forEach { put(JSONArray().put(it.first).put(it.second)) } })
     }
 
     /** Sauvegarde de sécurité toutes les 30 s pendant la séance. */

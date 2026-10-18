@@ -141,6 +141,13 @@ object ReportExport {
         val sum = ArrayList<List<Any?>>()
         sum.add(listOf(tr("Indicateur"), tr("Valeur"), tr("Unité")))
         sum.add(listOf(tr("Sport"), tr(sport.name), null))
+        val m = com.philip.fieldtracker.data.MatchAnalysis.compute(s, st)
+        s.position?.let { sum.add(listOf(tr("Ton poste"), tr(it.name), null)) }
+        if (s.goals.isNotEmpty()) sum.add(listOf(tr("Score"), "${m.scoreUs} – ${m.scoreThem}", null))
+        m.position?.let {
+            sum.add(listOf(tr("Dans la zone du poste"), r1(it.inZone * 100), "%"))
+            sum.add(listOf(tr("Position moyenne"), r1(it.avgU * 100), "%"))
+        }
         sum.add(listOf(tr("Date"), df.format(Date(s.startMs)), null))
         sum.add(listOf(tr("Durée active"), r1(st.activeMs / 60000.0), "min"))
         sum.add(listOf(tr("Terrain (longueur)"), r1(L), "m"))
@@ -204,6 +211,21 @@ object ReportExport {
         sp.add(listOf(tr("Heure"), tr("Vitesse max (km/h)"), tr("Distance (m)"), tr("X le long du terrain (m)"), tr("Y en largeur (m)")))
         st.sprints.forEach { sp.add(listOf(tf.format(Date(it.t)), r1(it.maxKmh), Math.round(it.distM), r1(it.u * L), r1(it.v * W))) }
         x.sheet(tr("Sprints"), sp, listOf(10.0, 18.0, 12.0, 22.0, 18.0))
+
+        // Score et états du match
+        if (s.goals.isNotEmpty()) {
+            val sc = ArrayList<List<Any?>>()
+            sc.add(listOf(tr("Minute"), tr("Équipe"), tr("Score")))
+            m.goals.forEach { g -> sc.add(listOf(g.minute, if (g.team == 0) tr("Nous") else tr("Eux"), "${g.us} – ${g.them}")) }
+            sc.add(listOf(null)); sc.add(listOf(tr("Selon le score"), tr("Temps (min)"), "m/min", tr("Pos. moy.") + " (%)", tr("Tiers off.") + " (%)"))
+            m.states.forEach { x ->
+                sc.add(listOf(
+                    when (x.state) { 1 -> tr("Je mène"); 0 -> tr("Égalité"); else -> tr("Je suis mené") },
+                    r1(x.timeMs / 60000.0), Math.round(x.mPerMin), r1(x.avgU * 100), r1(x.offThird * 100),
+                ))
+            }
+            x.sheet(tr("Score"), sc, listOf(18.0, 14.0, 12.0, 16.0, 14.0))
+        }
 
         // Zones cardio
         if (st.hrAvg > 0) {
@@ -331,8 +353,13 @@ object ReportExport {
             text("FIELDTRACKER", pad, y + 26, 26f, p.primary, f.mono)
             text(title, pad, y + 92, 60f, p.text, f.black)
             text(date, pad, y + 136, 30f, p.muted, f.regular)
+            val extra = listOfNotNull(
+                s.position?.let { tr(it.name) },
+                if (s.goals.isNotEmpty()) tr("Score") + " " + s.goals.count { it.team == 0 } + "–" + s.goals.count { it.team == 1 } else null,
+            ).joinToString(" · ")
             text(
-                trf("Durée %s · Terrain %.0f × %.0f m", fmtDur(st.activeMs), s.calibration.lengthM, s.calibration.widthM),
+                trf("Durée %s · Terrain %.0f × %.0f m", fmtDur(st.activeMs), s.calibration.lengthM, s.calibration.widthM) +
+                    if (extra.isNotEmpty()) " · $extra" else "",
                 pad, y + 170, 26f, p.muted, f.mono
             )
             y += 170 + 56

@@ -292,6 +292,9 @@ private fun LiveView(st: PhoneState, hr: Int, send: (String, String) -> Unit) {
     val elapsed = if (paused) st.elapsedMs else st.elapsedMs + (now - st.receivedAt).coerceIn(0, 5000)
     LivePanel(
         st.lang, st.inField, elapsed, paused, hr, st.speedKmh, st.distanceM,
+        st.us, st.them,
+        onGoal = { team -> send("/ft/cmd", if (team == 0) "goalA" else "goalB") },
+        onUndo = { team -> send("/ft/cmd", if (team == 0) "undoA" else "undoB") },
         onMark = { send("/ft/cmd", "mark") },
         onPause = { send("/ft/cmd", if (paused) "resume" else "pause") },
         onStop = { send("/ft/cmd", "stop") },
@@ -301,19 +304,24 @@ private fun LiveView(st: PhoneState, hr: Int, send: (String, String) -> Unit) {
 @Composable
 private fun LivePanel(
     lang: String, inField: Boolean, elapsed: Long, paused: Boolean, hr: Int, speedKmh: Double, distanceM: Double,
+    scoreUs: Int, scoreThem: Int, onGoal: (Int) -> Unit, onUndo: (Int) -> Unit,
     onMark: () -> Unit, onPause: () -> Unit, onStop: () -> Unit,
 ) {
     var holding by remember { mutableStateOf(false) }
+    val stopNow by androidx.compose.runtime.rememberUpdatedState(onStop)
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Box(
-            Modifier
-                .clip(RoundedCornerShape(50))
-                .background(if (inField) Lime.copy(alpha = 0.15f) else Orange.copy(alpha = 0.3f))
-                .padding(horizontal = 8.dp, vertical = 2.dp)
-        ) { T(if (inField) WatchText.t("DANS LE TERRAIN", lang) else WatchText.t("HORS TERRAIN", lang), 9.sp, if (inField) Lime else Orange, mono = true) }
-        Spacer(Modifier.height(2.dp))
-        T(fmt(elapsed), 30.sp, if (paused) Amber else Lime, mono = true)
+        // Score : un bouton par équipe (appui = +1, appui long = annuler)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ScoreButton(Lime, Bg, { onGoal(0) }, { onUndo(0) })
+            T("$scoreUs – $scoreThem", 18.sp, TextHi, mono = true)
+            ScoreButton(Orange, TextHi, { onGoal(1) }, { onUndo(1) })
+        }
+        T(
+            if (inField) WatchText.t("DANS LE TERRAIN", lang) else WatchText.t("HORS TERRAIN", lang),
+            8.sp, if (inField) Lime else Orange, mono = true,
+        )
+        T(fmt(elapsed), 26.sp, if (paused) Amber else if (inField) Lime else Orange, mono = true)
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 T(if (hr > 0) "$hr" else "—", 20.sp, Orange, mono = true)
@@ -326,9 +334,9 @@ private fun LivePanel(
         }
         T(
             if (distanceM < 1000) String.format("%.0f m", distanceM) else String.format("%.2f km", distanceM / 1000),
-            12.sp, Muted, mono = true
+            10.sp, Muted, mono = true
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             RoundButton("⚑", Surface, TextHi, size = 40) { onMark() }
             RoundButton(if (paused) "▶" else "II", if (paused) Lime else Orange, if (paused) Bg else TextHi, size = 48) { onPause() }
@@ -341,7 +349,7 @@ private fun LivePanel(
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onPress = { holding = true; tryAwaitRelease(); holding = false },
-                            onLongPress = { onStop() },
+                            onLongPress = { stopNow() },
                         )
                     },
                 contentAlignment = Alignment.Center,
@@ -349,6 +357,20 @@ private fun LivePanel(
         }
         T(WatchText.t("maintenir ■ pour terminer", lang), 8.sp, Muted, modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
     }
+}
+
+@Composable
+private fun ScoreButton(bg: Color, fg: Color, onTap: () -> Unit, onLong: () -> Unit) {
+    val tap by androidx.compose.runtime.rememberUpdatedState(onTap)
+    val long by androidx.compose.runtime.rememberUpdatedState(onLong)
+    Box(
+        Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(bg)
+            .pointerInput(Unit) { detectTapGestures(onTap = { tap() }, onLongPress = { long() }) },
+        contentAlignment = Alignment.Center,
+    ) { T("+1", 12.sp, fg, mono = true) }
 }
 
 @Composable
@@ -407,6 +429,9 @@ private fun StandaloneApp(rec: RecState, cfg: WatchConfig, permTick: Int, askPer
                 LivePanel(
                     cfg.lang, rec.inField, if (now > 0) WatchRecorder.elapsed(now) else 0L, rec.phase == RecPhase.PAUSED,
                     rec.hr, rec.speedKmh, rec.distanceM,
+                    rec.scoreUs, rec.scoreThem,
+                    onGoal = { WatchRecorder.goal(it) },
+                    onUndo = { WatchRecorder.undoGoal(it) },
                     onMark = { WatchRecorder.mark() },
                     onPause = { if (rec.phase == RecPhase.PAUSED) WatchRecorder.resume() else WatchRecorder.pause() },
                     onStop = { WatchRecorder.stop() },
@@ -488,6 +513,7 @@ private fun SoloReady(rec: RecState, cfg: WatchConfig, fix: GpsFix?) {
         T(cfg.sportName, 11.sp, Muted)
         T(WatchRecorder.t("Terrain balisé"), 14.sp, Lime)
         T(String.format("%.0f × %.0f m", rec.fieldL, rec.fieldW), 11.sp, TextHi, mono = true)
+        if (cfg.positionName.isNotEmpty()) T(cfg.positionName, 10.sp, Muted)
         GpsLine(fix)
         Spacer(Modifier.height(6.dp))
         RoundButton(WatchRecorder.t("START"), Lime, Bg, size = 72) { WatchRecorder.start() }

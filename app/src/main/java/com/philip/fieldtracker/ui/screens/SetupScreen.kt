@@ -104,6 +104,7 @@ fun SetupScreen(onNext: () -> Unit, onOpenStats: () -> Unit) {
         GpsPanel("setup-panel")
         Spacer(Modifier.height(20.dp))
         SportSection(selected)
+        selected?.let { PositionSection(it) }
         Spacer(Modifier.height(20.dp))
         HardwareSection(onOpenStats)
         Spacer(Modifier.height(20.dp))
@@ -553,4 +554,24 @@ fun fieldColors() = LocalPalette.current.let { p ->
         focusedContainerColor = p.surface,
         unfocusedContainerColor = p.surface,
     )
+}
+
+
+/** Choix du poste (pour les sports d'équipe). */
+@Composable
+fun PositionSection(sport: Sport) {
+    val positions = com.philip.fieldtracker.data.Positions.forSport(sport.id)
+    if (positions.isEmpty()) return
+    val p = LocalPalette.current
+    val current by AppState.position.collectAsState()
+    Spacer(Modifier.height(16.dp))
+    SectionTitle(tr("Ton poste"), positions.firstOrNull { it.id == current }?.let { tr(it.name) } ?: tr("Non précisé"))
+    Row(
+        Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Chip(tr("Non précisé"), current.isEmpty()) { AppState.setPosition("") }
+        positions.forEach { pos -> Chip(tr(pos.name), current == pos.id) { AppState.setPosition(pos.id) } }
+    }
+    Text(tr("Sert à l'analyse de poste et à comparer ta présence à la zone habituelle du poste."), style = Type.caption, color = p.muted)
 }
