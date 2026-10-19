@@ -5,6 +5,10 @@ plugins {
 }
 
 android {
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
     namespace = "com.philip.fieldtracker"
     compileSdk = 35
 

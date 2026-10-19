@@ -23,18 +23,20 @@ jobs:
       - name: Compiler téléphone + montre
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug :wear:assembleDebug --stacktrace
+          ./gradlew :app:assembleDebug :wear:assembleDebug :app:bundleRelease :wear:bundleRelease --stacktrace
 
       - name: Renommer les APK
         run: |
           mkdir -p out
           cp app/build/outputs/apk/debug/app-debug.apk out/FieldTracker-telephone.apk
           cp wear/build/outputs/apk/debug/wear-debug.apk out/FieldTracker-montre.apk
+          cp app/build/outputs/bundle/release/app-release.aab out/FieldTracker-telephone.aab
+          cp wear/build/outputs/bundle/release/wear-release.aab out/FieldTracker-montre.aab
 
       - uses: actions/upload-artifact@v4
         with:
           name: FieldTracker-apk
-          path: out/*.apk
+          path: out/*
 
       - name: Publier (téléchargement direct)
         if: github.ref == 'refs/heads/main'
@@ -44,4 +46,6 @@ jobs:
           name: FieldTracker – dernière version
           prerelease: false
           make_latest: true
-          files: out/*.apk
+          files: |
+            out/*.apk
+            out/*.aab
