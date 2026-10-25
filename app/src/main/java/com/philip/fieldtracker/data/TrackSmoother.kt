@@ -13,13 +13,39 @@ data class RawFix(val t: Long, val lat: Double, val lon: Double, val acc: Double
  */
 object TrackSmoother {
 
+    /** Un joueur ne peut pas être à plus de [FAR_M] m du terrain : au-delà, c'est une erreur GPS. */
+    private const val FAR_M = 30.0
+
+    fun nearField(cal: Calibration, sport: Sport?, lat: Double, lon: Double): Boolean {
+        val uv = cal.toUV(LatLon(lat, lon))
+        return cal.isInside(uv, (sport?.marginLM ?: 0.0) + FAR_M, (sport?.marginWM ?: 0.0) + FAR_M)
+    }
+
+    /** Recalcule (u, v) et « dans le terrain » de points déjà enregistrés, sans les points aberrants. */
+    fun reproject(points: List<TrackPoint>, cal: Calibration, sport: Sport?): List<TrackPoint> {
+        val mL = (sport?.marginLM ?: 0.0) + 1.5
+        val mW = (sport?.marginWM ?: 0.0) + 1.5
+        val out = ArrayList<TrackPoint>(points.size)
+        for (p in points) {
+            if (!nearField(cal, sport, p.lat, p.lon)) continue
+            val prev = out.lastOrNull()
+            if (prev != null) {
+                val dt = ((p.t - prev.t) / 1000.0).coerceAtLeast(0.2)
+                if (Geo.distance(LatLon(prev.lat, prev.lon), LatLon(p.lat, p.lon)) / dt > 12.0 && p.t - prev.t < 5000) continue
+            }
+            val uv = cal.toUV(LatLon(p.lat, p.lon))
+            out.add(p.copy(u = uv[0], v = uv[1], inField = cal.isInside(uv, mL, mW)))
+        }
+        return out
+    }
+
     fun smooth(
         input: List<RawFix>,
         cal: Calibration,
         sport: Sport,
         hr: List<Pair<Long, Int>>,
     ): List<TrackPoint> {
-        val raw = input.filter { it.acc <= 30.0 }.sortedBy { it.t }
+        val raw = input.filter { it.acc <= 30.0 && nearField(cal, sport, it.lat, it.lon) }.sortedBy { it.t }
         // 1. Rejet des sauts impossibles (> 12 m/s), sauf s'ils se confirment
         val clean = ArrayList<RawFix>(raw.size)
         var rejected = 0

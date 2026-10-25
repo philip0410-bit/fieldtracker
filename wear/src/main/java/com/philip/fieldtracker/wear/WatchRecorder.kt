@@ -30,6 +30,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
+import kotlin.math.abs
 import java.util.UUID
 import java.util.zip.GZIPOutputStream
 import kotlin.math.max
@@ -165,7 +166,9 @@ object WatchRecorder : SensorEventListener {
 
     private val listener = LocationListener { loc: Location ->
         val f = GpsFix(
-            loc.time.takeIf { it > 0 } ?: System.currentTimeMillis(), loc.latitude, loc.longitude,
+            // Heure de la mesure ramenée sur l'horloge de la montre (même base que le cardio et les buts)
+            System.currentTimeMillis() - ((android.os.SystemClock.elapsedRealtimeNanos() - loc.elapsedRealtimeNanos) / 1_000_000L).coerceIn(0L, 30_000L),
+            loc.latitude, loc.longitude,
             if (loc.hasAccuracy()) loc.accuracy else 99f, if (loc.hasSpeed()) loc.speed else -1f,
         )
         _fix.value = f.copy(t = System.currentTimeMillis())
@@ -243,15 +246,16 @@ object WatchRecorder : SensorEventListener {
         captureJob = scope.launch {
             val samples = ArrayList<GpsFix>()
             val start = System.currentTimeMillis()
-            val limit = max(20f, (_fix.value?.acc ?: 20f) * 1.5f).coerceAtMost(60f)
+            // Coins précis indispensables : seules les mesures à ±20 m (±30 m en dernier recours) sont gardées
+            val limit = 20f
             _state.value = _state.value.copy(capturing = 0f, message = "")
-            while (System.currentTimeMillis() - start < 4000) {
+            while (System.currentTimeMillis() - start < 6000) {
                 delay(150)
-                _state.value = _state.value.copy(capturing = ((System.currentTimeMillis() - start) / 4000f).coerceAtMost(1f))
+                _state.value = _state.value.copy(capturing = ((System.currentTimeMillis() - start) / 6000f).coerceAtMost(1f))
                 val f = _fix.value
                 if (f != null && fresh(f, 2500) && f.acc <= limit && samples.none { it.t == f.t }) samples.add(f)
             }
-            if (samples.isEmpty()) _fix.value?.takeIf { fresh(it, 10000) && it.acc <= 60f }?.let { samples.add(it) }
+            if (samples.isEmpty()) _fix.value?.takeIf { fresh(it, 3000) && it.acc <= 30f }?.let { samples.add(it) }
             if (samples.isEmpty()) {
                 _state.value = _state.value.copy(capturing = null, message = t("GPS faible, réessaie"))
                 vibrate(longArrayOf(0, 350, 150, 350))
@@ -275,6 +279,14 @@ object WatchRecorder : SensorEventListener {
         val list = corners.filterNotNull()
         if (list.size < 4) return
         val f = WatchGeo.Field(list, c.lengthM > c.widthM, c.marginLM, c.marginWM)
+        val d1 = WatchGeo.distance(list[0], list[2]); val d2 = WatchGeo.distance(list[1], list[3])
+        if (abs(d1 - d2) / max(d1, d2) > 0.15) {
+            // Diagonales trop différentes : un coin est faux → on recommence
+            resetCalibration()
+            _state.value = _state.value.copy(message = t("Coins imprécis : recommence le balisage"))
+            vibrate(longArrayOf(0, 350, 150, 350))
+            return
+        }
         field = f
         if (save) {
             prefs.edit().putString("cal_" + c.sportId, JSONArray().apply {
@@ -388,8 +400,10 @@ object WatchRecorder : SensorEventListener {
     private fun onFix(f: GpsFix) {
         if (_state.value.phase != RecPhase.LIVE) return
         if (f.acc > 30f) return
-        fixes.add(f)
         val fl = field ?: return
+        // À plus de 30 m du terrain : erreur GPS, ignorée
+        if (!fl.near(fl.uv(LL(f.lat, f.lon)), 30.0)) return
+        fixes.add(f)
         val prev = lastLive
         val dt = if (prev != null) ((f.t - prev.t) / 1000.0).coerceIn(0.2, 10.0) else 1.0
         val d = if (prev != null) WatchGeo.distance(LL(prev.lat, prev.lon), LL(f.lat, f.lon)) else 0.0

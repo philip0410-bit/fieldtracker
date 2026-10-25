@@ -203,6 +203,7 @@ object WatchText {
         "COIN %d/4" to ("CORNER %d/4" to "코너 %d/4"),
         "Mesure… reste immobile" to ("Measuring… stay still" to "측정 중… 움직이지 마세요"),
         "GPS faible, réessaie" to ("Weak GPS, try again" to "GPS 약함, 다시 시도"),
+        "Coins imprécis : recommence le balisage" to ("Inaccurate corners: mark the field again" to "코너 부정확: 다시 설정하세요"),
         "Terrain balisé" to ("Field marked" to "경기장 설정 완료"),
         "START" to ("START" to "시작"),
         "DANS LE TERRAIN" to ("INSIDE FIELD" to "경기장 안"),

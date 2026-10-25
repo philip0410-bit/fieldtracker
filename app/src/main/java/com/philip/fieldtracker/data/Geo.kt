@@ -64,6 +64,35 @@ object Geo {
         return DoubleArray(9) { if (it < 8) a[it][8] else 1.0 }
     }
 
+    /**
+     * Transformation affine (moindres carrés) des 4 coins vers le carré unité.
+     * Contrairement à une homographie, elle ne peut jamais « projeter à l'infini »
+     * des positions quand les coins sont imprécis (GPS de montre).
+     */
+    fun affineFit(src: List<DoubleArray>, dst: List<DoubleArray>): DoubleArray {
+        val m = Array(3) { DoubleArray(3) }
+        val bu = DoubleArray(3); val bv = DoubleArray(3)
+        for (i in src.indices) {
+            val r = doubleArrayOf(src[i][0], src[i][1], 1.0)
+            for (a in 0 until 3) {
+                for (b in 0 until 3) m[a][b] += r[a] * r[b]
+                bu[a] += r[a] * dst[i][0]; bv[a] += r[a] * dst[i][1]
+            }
+        }
+        val pu = solve3(m, bu); val pv = solve3(m, bv)
+        return doubleArrayOf(pu[0], pu[1], pu[2], pv[0], pv[1], pv[2], 0.0, 0.0, 1.0)
+    }
+
+    private fun solve3(m: Array<DoubleArray>, b: DoubleArray): DoubleArray {
+        fun det(a: Array<DoubleArray>) =
+            a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) -
+                a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
+                a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0])
+        val d = det(m)
+        if (abs(d) < 1e-12) return doubleArrayOf(0.0, 0.0, 0.0)
+        return DoubleArray(3) { k -> det(Array(3) { r -> DoubleArray(3) { c -> if (c == k) b[r] else m[r][c] } }) / d }
+    }
+
     fun applyH(h: DoubleArray, x: Double, y: Double): DoubleArray {
         val w = h[6] * x + h[7] * y + h[8]
         return doubleArrayOf((h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w)
@@ -120,7 +149,7 @@ object Geo {
 class Calibration(val corners: List<LatLon>, val estimated: Boolean = false) {
     val origin: LatLon = corners[0]
     private val local = corners.map { Geo.toLocal(origin, it) }
-    private val h: DoubleArray = Geo.homography(
+    private val h: DoubleArray = Geo.affineFit(
         local,
         listOf(doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 0.0), doubleArrayOf(1.0, 1.0), doubleArrayOf(0.0, 1.0))
     )

@@ -90,6 +90,13 @@ data class Session(
                     )
                 )
             }
+            val src = o.optString("source", "gps")
+            if (src == "watch") {
+                // Séances montre : positions terrain recalculées (calibrage robuste) et points aberrants retirés
+                val sp = Sports.byId(o.getString("sportId"))
+                val fixed = TrackSmoother.reproject(points, cal, sp)
+                points.clear(); points.addAll(fixed)
+            }
             val hrA = o.optJSONArray("hr") ?: JSONArray()
             val hr = (0 until hrA.length()).map { val a = hrA.getJSONArray(it); a.getLong(0) to a.getInt(1) }
             val hlA = o.optJSONArray("highlights") ?: JSONArray()
@@ -104,7 +111,7 @@ data class Session(
                 points = points,
                 hrSamples = hr,
                 highlights = hl,
-                source = o.optString("source", "gps"),
+                source = src,
                 title = o.optString("title", ""),
                 positionId = o.optString("position", ""),
                 goals = (o.optJSONArray("goals") ?: JSONArray()).let { g ->

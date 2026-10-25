@@ -49,6 +49,35 @@ object WatchGeo {
         return DoubleArray(9) { if (it < 8) a[it][8] else 1.0 }
     }
 
+    /**
+     * Transformation affine (moindres carrés) des 4 coins vers le carré unité.
+     * Contrairement à une homographie, elle ne peut jamais « projeter à l'infini »
+     * des positions quand les coins sont imprécis (GPS de montre).
+     */
+    fun affineFit(src: List<DoubleArray>, dst: List<DoubleArray>): DoubleArray {
+        val m = Array(3) { DoubleArray(3) }
+        val bu = DoubleArray(3); val bv = DoubleArray(3)
+        for (i in src.indices) {
+            val r = doubleArrayOf(src[i][0], src[i][1], 1.0)
+            for (a in 0 until 3) {
+                for (b in 0 until 3) m[a][b] += r[a] * r[b]
+                bu[a] += r[a] * dst[i][0]; bv[a] += r[a] * dst[i][1]
+            }
+        }
+        val pu = solve3(m, bu); val pv = solve3(m, bv)
+        return doubleArrayOf(pu[0], pu[1], pu[2], pv[0], pv[1], pv[2], 0.0, 0.0, 1.0)
+    }
+
+    private fun solve3(m: Array<DoubleArray>, b: DoubleArray): DoubleArray {
+        fun det(a: Array<DoubleArray>) =
+            a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) -
+                a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
+                a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0])
+        val d = det(m)
+        if (abs(d) < 1e-12) return doubleArrayOf(0.0, 0.0, 0.0)
+        return DoubleArray(3) { k -> det(Array(3) { r -> DoubleArray(3) { c -> if (c == k) b[r] else m[r][c] } }) / d }
+    }
+
     /** Terrain balisé : convertit une position GPS en coordonnées terrain (u, v) dans [0..1]. */
     class Field(val corners: List<LL>, sportLonger: Boolean, val marginLM: Double, val marginWM: Double) {
         val c: List<LL>
@@ -65,7 +94,7 @@ object WatchGeo {
             lengthM = (distance(c[0], c[1]) + distance(c[3], c[2])) / 2
             widthM = (distance(c[1], c[2]) + distance(c[0], c[3])) / 2
             origin = c[0]
-            h = homography(
+            h = affineFit(
                 c.map { toLocal(origin, it) },
                 listOf(doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 0.0), doubleArrayOf(1.0, 1.0), doubleArrayOf(0.0, 1.0)),
             )
@@ -75,6 +104,12 @@ object WatchGeo {
             val l = toLocal(origin, p)
             val w = h[6] * l[0] + h[7] * l[1] + h[8]
             return doubleArrayOf((h[0] * l[0] + h[1] * l[1] + h[2]) / w, (h[3] * l[0] + h[4] * l[1] + h[5]) / w)
+        }
+
+        fun near(uv: DoubleArray, extraM: Double): Boolean {
+            val tu = (marginLM + extraM) / lengthM.coerceAtLeast(1.0)
+            val tv = (marginWM + extraM) / widthM.coerceAtLeast(1.0)
+            return uv[0] >= -tu && uv[0] <= 1 + tu && uv[1] >= -tv && uv[1] <= 1 + tv
         }
 
         fun inside(uv: DoubleArray): Boolean {

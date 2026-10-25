@@ -269,7 +269,7 @@ private fun CalibView(st: PhoneState, send: (String, String) -> Unit) {
         }
         if (st.message.isNotEmpty() && !st.capturing) {
             Spacer(Modifier.height(4.dp))
-            T(WatchText.t("GPS faible, réessaie", st.lang), 10.sp, Amber)
+            T(WatchText.t(st.message, st.lang), 10.sp, Amber)
         }
     }
 }
