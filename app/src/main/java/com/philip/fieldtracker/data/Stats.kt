@@ -15,7 +15,7 @@ data class Profile(
 
 data class SpeedBand(val label: String, val fromKmh: Double, val toKmh: Double, val timeMs: Long, val distM: Double)
 
-data class SprintEvent(val t: Long, val maxKmh: Double, val u: Double, val v: Double, val distM: Double)
+data class SprintEvent(val t: Long, val maxKmh: Double, val u: Double, val v: Double, val distM: Double, val endT: Long = t)
 
 data class SessionStats(
     val activeMs: Long,
@@ -41,6 +41,9 @@ data class SessionStats(
     /** Temps passé dans les 5 zones cardio (ms). */
     val hrZonesMs: LongArray,
     val calories: Int,
+    /** Seuils réellement utilisés (adaptés au joueur). */
+    val sprintKmh: Double = 25.2,
+    val hiKmh: Double = 19.8,
 ) {
     companion object {
         const val HX = 32
@@ -75,10 +78,18 @@ object StatsCalculator {
     fun compute(s: Session, p: Profile): SessionStats {
         val sport = s.sport
         val pts = s.points
-        val hi = sport.hiKmh
+        // Vmax du joueur (2 mesures de suite, comme plus bas)
+        var vTop = 0.0
+        for (i in 1 until pts.size) {
+            val dt = pts[i].t - pts[i - 1].t
+            if (dt in 1..5000) vTop = max(vTop, min(min(pts[i - 1].speed, pts[i].speed) * 3.6, 45.0))
+        }
+        // Seuils adaptés au joueur : un amateur n'atteint pas toujours les seuils pro.
+        // Sprint = ≥ 80 % de sa Vmax (jamais sous 16 km/h ni au-dessus du seuil du sport)
+        val sp = min(sport.sprintKmh, max(16.0, vTop * 0.8))
+        val hi = min(sport.hiKmh, max(12.0, vTop * 0.6)).coerceAtMost(sp - 1.0)
         val mu = sport.marginLM / sport.lengthM
         val mv = sport.marginWM / sport.widthM
-        val sp = sport.sprintKmh
         val bandsDef = listOf(
             Triple("Arrêt / marche", 0.0, 7.0),
             Triple("Footing", 7.0, hi * 0.72),
@@ -167,7 +178,7 @@ object StatsCalculator {
                 if (kmh > sprintMax) { sprintMax = kmh; sprintU = a.u; sprintV = a.v }
                 if (kmh < sp * 0.9) {
                     inSprint = false
-                    if (b.t - sprintStart >= 1000) sprints.add(SprintEvent(sprintStart, sprintMax, sprintU, sprintV, sprintD))
+                    if (b.t - sprintStart >= 1000) sprints.add(SprintEvent(sprintStart, sprintMax, sprintU, sprintV, sprintD, b.t))
                 }
             }
 
@@ -182,7 +193,7 @@ object StatsCalculator {
             }
             kcal += kcalPerMinute(a.hr, kmh, p) * dt / 60000.0
         }
-        if (inSprint && sprintD > 0) sprints.add(SprintEvent(sprintStart, sprintMax, sprintU, sprintV, sprintD))
+        if (inSprint && sprintD > 0) sprints.add(SprintEvent(sprintStart, sprintMax, sprintU, sprintV, sprintD, pts.last().t))
 
         val zoneTotal = zones.sumOf { it.sum() }
         if (zoneTotal > 0) for (r in zones) for (c in r.indices) r[c] /= zoneTotal
@@ -210,6 +221,8 @@ object StatsCalculator {
             hrMax = hrPeak,
             hrZonesMs = hrZones,
             calories = kcal.toInt(),
+            sprintKmh = sp,
+            hiKmh = hi,
         )
     }
 

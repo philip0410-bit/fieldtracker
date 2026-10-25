@@ -273,6 +273,18 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
                         )
                     }
                     2 -> st.sprints.forEach { sp ->
+                        // Parcours du sprint (du départ à la fin) + point de vitesse max
+                        val seg = s.points.filter { it.t >= sp.t && it.t <= sp.endT }
+                        if (seg.size >= 2) {
+                            val path = Path()
+                            seg.forEachIndexed { i, pt ->
+                                val o = Offset(r.left + pt.u.toFloat().coerceIn(-1f, 2f) * r.width, r.top + pt.v.toFloat().coerceIn(-1f, 2f) * r.height)
+                                if (i == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
+                            }
+                            drawPath(path, p.secondary.copy(alpha = 0.85f), style = Stroke(5f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                            val s0 = seg.first()
+                            drawCircle(p.secondary, 6f, Offset(r.left + s0.u.toFloat().coerceIn(-1f, 2f) * r.width, r.top + s0.v.toFloat().coerceIn(-1f, 2f) * r.height))
+                        }
                         val o = Offset(r.left + sp.u.toFloat().coerceIn(-1f, 2f) * r.width, r.top + sp.v.toFloat().coerceIn(-1f, 2f) * r.height)
                         drawCircle(p.secondary.copy(alpha = 0.3f), 22f, o)
                         drawCircle(p.secondary, 9f, o)
@@ -394,12 +406,12 @@ private fun SessionReport(s: Session, st: SessionStats, onHistory: () -> Unit) {
             MetricCard(
                 tr("Sprints"), "${st.sprints.size}", "", Modifier.weight(1f),
                 icon = Icons.Filled.Bolt, color = p.secondary,
-                footer = String.format("> %.0f km/h · %.0f m", sport.sprintKmh, st.sprintDistanceM)
+                footer = String.format("> %.0f km/h · %.0f m", st.sprintKmh, st.sprintDistanceM)
             )
             MetricCard(
                 tr("Haute intensité"), formatKm(st.hiDistanceM), unitKm(st.hiDistanceM), Modifier.weight(1f),
                 icon = Icons.Filled.Timer, color = p.warning,
-                footer = trf("> %.0f km/h · %d accélérations", sport.hiKmh, st.accelerations)
+                footer = trf("> %.0f km/h · %d accélérations", st.hiKmh, st.accelerations)
             )
         }
         Spacer(Modifier.height(10.dp))

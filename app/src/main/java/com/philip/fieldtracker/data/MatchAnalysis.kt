@@ -47,7 +47,7 @@ object MatchAnalysis {
         val sport = s.sport
         val goals = s.goals.sortedBy { it.t }
         val pts = s.points
-        val hi = sport.hiKmh
+        val hi = st.hiKmh
 
         // Temps actif écoulé à chaque instant (pour la minute des buts)
         fun activeAt(t: Long): Long {
